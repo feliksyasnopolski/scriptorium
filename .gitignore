@@ -1,0 +1,57 @@
+# Rails
+backend/.bundle/
+backend/log/*
+backend/tmp/*
+backend/storage/*
+backend/config/master.key
+backend/config/credentials/*.key
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Node, Vue, and Vite
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+frontend/coverage/
+frontend/.eslintcache
+frontend/*.tsbuildinfo
+
+# Local environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs and generated reports
+*.log
+*.pid
+*.seed
+coverage/
+reports/
+
+# Operating systems
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100/
+.Trashes/
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# General generated/build output
+build/
+dist/
+tmp/
+cache/
+.cache/
