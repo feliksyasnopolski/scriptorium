@@ -18,6 +18,7 @@ onMounted(async () => {
 async function createProject() { const project = await store.createProject(newTitle.value || 'Untitled project'); newTitle.value = ''; await openProject(project.id) }
 async function openProject(id: string) { routeProjectId.value = id; history.replaceState({}, '', `?project=${id}`); await store.openProject(id) }
 function goHome() { routeProjectId.value = null; history.replaceState({}, '', window.location.pathname) }
+function conflictProject() { return routeProjectId.value ? store.conflicts[routeProjectId.value] : undefined }
 </script>
 
 <template>
@@ -39,5 +40,6 @@ function goHome() { routeProjectId.value = null; history.replaceState({}, '', wi
       </div>
       <button class="add-section" type="button" @click="store.addSection(currentProject.id)">+ Add section</button>
     </section>
+    <div v-if="conflictProject()" class="dialog-backdrop" role="presentation"><div class="conflict-dialog" role="dialog" aria-modal="true" aria-labelledby="conflict-title"><h2 id="conflict-title">This project changed online</h2><p>Choose which copy should become authoritative. Scriptorium will not merge them automatically.</p><div class="dialog-actions"><button type="button" @click="store.loadOnline(currentProject!.id)">Load online copy</button><button class="primary-button" type="button" @click="store.overwriteOnline(currentProject!.id)">Overwrite online with my copy</button></div></div></div>
   </main>
 </template>

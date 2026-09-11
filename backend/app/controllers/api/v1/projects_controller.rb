@@ -19,13 +19,16 @@ module Api
         project = VideoProject.new(project_params)
         return render_errors(project) unless project.save
 
+        ProjectDocumentUpdater.new(project, body_params.fetch("project")).call if body_params.dig("project", "sections")
+
         render json: ProjectDocument.render(project), status: :created
       end
 
       def update_document
         payload = body_params
         return render json: { error: "Unsupported schema version" }, status: :unprocessable_entity unless payload["schema_version"].to_i == ProjectDocument::SCHEMA_VERSION
-        return render json: { error: "Revision conflict", document: ProjectDocument.render(@project) }, status: :conflict unless payload["revision"].to_i == @project.revision
+        forced = ActiveModel::Type::Boolean.new.cast(request.query_parameters["force"])
+        return render json: { error: "Revision conflict", document: ProjectDocument.render(@project) }, status: :conflict unless forced || payload["revision"].to_i == @project.revision
 
         ProjectDocumentUpdater.new(@project, payload.fetch("project")).call
         render json: ProjectDocument.render(@project.reload)
@@ -48,7 +51,9 @@ module Api
       end
 
       def project_params
-        body_params.fetch("project", {}).select { |key, _| %w[title target_duration_seconds].include?(key) }.symbolize_keys
+        params = body_params.fetch("project", {}).select { |key, _| %w[id title target_duration_seconds].include?(key) }
+        params["public_id"] = params.delete("id") if params.key?("id")
+        params.symbolize_keys
       end
 
       def serialize_summary(project)

@@ -230,9 +230,14 @@ revision with the complete document. Rails rejects stale revisions with HTTP
 partially change the project.
 
 The frontend edits its local Pinia document first and quietly debounces one
-project-document save. This is the persistence shape that the next phase will
-extend with durable offline-first storage; this phase does not add IndexedDB or
-background synchronization.
+project-document save. Known project
+documents are stored durably in IndexedDB before remote synchronization. The
+application shell's static assets are cached by a production service worker;
+project data is not hidden in an HTTP cache. Dirty documents synchronize when
+the server is reachable again, using the revision check above. A stale revision
+shows an explicit choice to load the online copy or overwrite it with the
+local copy; there is no automatic merge. Project deletion deliberately still
+requires a connection in this phase.
 
 ## Possible future users
 

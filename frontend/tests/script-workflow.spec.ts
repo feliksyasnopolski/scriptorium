@@ -4,7 +4,7 @@ test('author can create, edit, reorder, reload, and delete a project', async ({ 
   const title = `Browser acceptance ${Date.now()}`
   const editedTitle = `A Weekend in the Mountains ${Date.now()}`
   let projectId: string | undefined
-  const documentSave = () => page.waitForResponse((response) => response.url().includes('/document') && response.request().method() === 'PUT')
+  const documentSave = async () => { await page.waitForTimeout(1500); await expect(page.getByText('Synced')).toBeVisible() }
   const projectPatch = () => documentSave()
 
   try {
@@ -13,13 +13,13 @@ test('author can create, edit, reorder, reload, and delete a project', async ({ 
     const createResponse = page.waitForResponse((response) => response.url().endsWith('/api/v1/projects') && response.request().method() === 'POST')
     await page.getByLabel('New project title').fill(title)
     await page.getByRole('button', { name: '+ New project' }).click()
-    projectId = (await (await createResponse).json()).id
+    projectId = (await (await createResponse).json()).project.id
     await expect(page.getByLabel('Project title')).toHaveValue(title)
 
     const projectTitle = page.getByLabel('Project title')
     let saved = projectPatch(); await projectTitle.fill(editedTitle); await saved
     const target = page.getByLabel('Target duration')
-    saved = projectPatch(); await target.fill('900'); expect((await saved).json().then((body) => body.project.target_duration_seconds)).resolves.toBe(900)
+    saved = projectPatch(); await target.fill('900'); await saved
 
     await page.getByRole('button', { name: '+ Add section' }).click()
     const sections = page.getByTestId('section-card')
@@ -50,7 +50,6 @@ test('author can create, edit, reorder, reload, and delete a project', async ({ 
     const reorderSaved = documentSave(); await subsections.nth(1).getByRole('button', { name: 'Move subsection up' }).click(); await reorderSaved
     await expect(opening.getByTestId('subsection-card').nth(0).getByPlaceholder('Subsection title (optional)')).toHaveValue('Make the case')
     await expect(opening.getByTestId('subsection-card').nth(1).getByPlaceholder('Subsection title (optional)')).toHaveValue('Set the scene')
-
     await page.reload()
     await expect(page.getByLabel('Project title')).toHaveValue(editedTitle)
     await expect(page.getByLabel('Target duration')).toHaveValue('900')
@@ -75,6 +74,86 @@ test('author can create, edit, reorder, reload, and delete a project', async ({ 
     await card.getByRole('button', { name: 'Delete project' }).click()
     await expect(card).toHaveCount(0)
     projectId = undefined
+  } finally {
+    if (projectId) await request.delete(`/api/v1/projects/${projectId}`)
+  }
+})
+
+test('keeps a synchronized project editable across blocked API traffic and reload', async ({ page, request }) => {
+  const title = `Offline acceptance ${Date.now()}`
+  let projectId: string | undefined
+  try {
+    await page.goto('/')
+    const createResponse = page.waitForResponse((response) => response.url().endsWith('/api/v1/projects') && response.request().method() === 'POST')
+    await page.getByLabel('New project title').fill(title)
+    await page.getByRole('button', { name: '+ New project' }).click()
+    projectId = (await (await createResponse).json()).project.id
+    await expect(page.getByLabel('Project title')).toHaveValue(title)
+    await page.route('**/api/**', (route) => route.abort())
+
+    await page.getByLabel('Project title').fill(`${title} locally`)
+    await page.getByRole('button', { name: '+ Add section' }).click()
+    await page.getByTestId('section-card').getByLabel('Section title').fill('Offline opening')
+    await page.getByTestId('section-card').getByRole('button', { name: '+ Add subsection' }).click()
+    await page.getByTestId('subsection-card').getByLabel('Script').fill('Writing continues without the server.')
+    await expect(page.getByText('Saved locally')).toBeVisible()
+    await page.waitForTimeout(1000)
+
+    await page.reload()
+    await expect(page.getByLabel('Project title')).toHaveValue(`${title} locally`)
+    await expect(page.getByLabel('Section title')).toHaveValue('Offline opening')
+    await expect(page.getByLabel('Script')).toHaveValue('Writing continues without the server.')
+
+    await page.unroute('**/api/**')
+    const synced = page.waitForResponse((response) => response.url().includes('/document') && response.request().method() === 'PUT')
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+    await synced
+    await expect(page.getByText('Synced')).toBeVisible()
+    const serverDocument = await (await request.get(`/api/v1/projects/${projectId}/document`)).json()
+    expect(serverDocument.project.title).toBe(`${title} locally`)
+    expect(serverDocument.project.sections[0].subsections[0].script).toBe('Writing continues without the server.')
+  } finally {
+    if (projectId) await request.delete(`/api/v1/projects/${projectId}`)
+  }
+})
+
+test('offers load-online and overwrite-online choices for a revision conflict', async ({ page, request }) => {
+  const title = `Conflict acceptance ${Date.now()}`
+  let projectId: string | undefined
+  try {
+    await page.goto('/')
+    const createResponse = page.waitForResponse((response) => response.url().endsWith('/api/v1/projects') && response.request().method() === 'POST')
+    await page.getByLabel('New project title').fill(title)
+    await page.getByRole('button', { name: '+ New project' }).click()
+    projectId = (await (await createResponse).json()).project.id
+    await expect(page.getByLabel('Project title')).toHaveValue(title)
+
+    await page.route('**/api/**', (route) => route.abort())
+    await page.getByLabel('Project title').fill('Local copy')
+    await page.waitForTimeout(1000)
+    await expect(page.getByText('Sync error')).toBeVisible()
+    await page.unroute('**/api/**')
+    const remote = await (await request.get(`/api/v1/projects/${projectId}/document`)).json()
+    remote.project.title = 'Online copy'
+    await request.put(`/api/v1/projects/${projectId}/document`, { data: remote })
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.getByRole('dialog').getByRole('button', { name: 'Load online copy' }).click()
+    await expect(page.getByLabel('Project title')).toHaveValue('Online copy')
+
+    await page.route('**/api/**', (route) => route.abort())
+    await page.getByLabel('Project title').fill('Local winner')
+    await page.waitForTimeout(1000)
+    await expect(page.getByText('Sync error')).toBeVisible()
+    await page.unroute('**/api/**')
+    const latest = await (await request.get(`/api/v1/projects/${projectId}/document`)).json()
+    latest.project.title = 'Another online copy'
+    await request.put(`/api/v1/projects/${projectId}/document`, { data: latest })
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.getByRole('dialog').getByRole('button', { name: 'Overwrite online with my copy' }).click()
+    await expect(page.getByText('Synced')).toBeVisible()
+    expect((await (await request.get(`/api/v1/projects/${projectId}/document`)).json()).project.title).toBe('Local winner')
   } finally {
     if (projectId) await request.delete(`/api/v1/projects/${projectId}`)
   }

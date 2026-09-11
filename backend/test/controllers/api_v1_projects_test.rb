@@ -82,4 +82,27 @@ class ApiV1ProjectsTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
     assert_equal ["can't be blank"], response.parsed_body.fetch("errors").fetch("title")
   end
+
+  test "accepts a client-generated id and complete document on create" do
+    project_id = SecureRandom.uuid
+    section_id = SecureRandom.uuid
+    post "/api/v1/projects", params: { project: { id: project_id, title: "Offline project", target_duration_seconds: 300, sections: [{ id: section_id, title: "Opening", subsections: [] }] } }.to_json, headers: { "CONTENT_TYPE" => "application/json" }
+    assert_response :created
+    assert_equal project_id, response.parsed_body.dig("project", "id")
+    assert_equal [section_id], response.parsed_body.dig("project", "sections").map { |section| section.fetch("id") }
+  end
+
+  test "force overwrite explicitly replaces a stale document" do
+    post "/api/v1/projects", params: { project: { title: "Original" } }
+    document = response.parsed_body
+    project_id = document.dig("project", "id")
+    document["project"]["title"] = "Remote"
+    put "/api/v1/projects/#{project_id}/document", params: document.to_json, headers: { "CONTENT_TYPE" => "application/json" }
+    assert_response :success
+    document["project"]["title"] = "Local wins"
+    put "/api/v1/projects/#{project_id}/document?force=true", params: document.to_json, headers: { "CONTENT_TYPE" => "application/json" }
+    assert_response :success
+    assert_equal "Local wins", response.parsed_body.dig("project", "title")
+    assert_equal 2, response.parsed_body.fetch("revision")
+  end
 end
