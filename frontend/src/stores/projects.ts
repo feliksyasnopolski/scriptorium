@@ -1,0 +1,27 @@
+import { defineStore } from 'pinia'
+import { computed, ref } from 'vue'
+import type { Project } from '../types'
+
+type ProjectField = 'title' | 'target_duration_seconds'
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> { const response = await fetch(`/api/v1${path}`, { headers: { 'Content-Type': 'application/json' }, ...options }); if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(Object.values(body.errors ?? {}).flat().join(', ') || body.error || 'Request failed') }; return response.status === 204 ? undefined as T : response.json() }
+
+export const useProjectsStore = defineStore('projects', () => {
+  const projects = ref<Project[]>([]); const error = ref(''); const saving = ref(0); const timers = new Map<string, ReturnType<typeof setTimeout>>()
+  const saveStateLabel = computed(() => saving.value ? 'Saving…' : error.value ? 'Error saving' : 'Saved')
+  function replaceProject(project: Project) { const index = projects.value.findIndex((item) => item.id === project.id); if (index >= 0) projects.value[index] = project; else projects.value.push(project) }
+  async function loadProjects() { projects.value = await request<Project[]>('/projects') }
+  async function openProject(id: number) { replaceProject(await request<Project>(`/projects/${id}`)) }
+  async function createProject(title: string) { const project = await request<Project>('/projects', { method: 'POST', body: JSON.stringify({ project: { title } }) }); replaceProject(project); return project }
+  async function deleteProject(id: number) { if (!window.confirm('Delete this project?')) return; await request(`/projects/${id}`, { method: 'DELETE' }); projects.value = projects.value.filter((project) => project.id !== id) }
+  function schedule(key: string, action: () => Promise<void>) { if (timers.has(key)) clearTimeout(timers.get(key)); timers.set(key, setTimeout(async () => { saving.value++; error.value = ''; try { await action() } catch (reason) { error.value = reason instanceof Error ? reason.message : 'Request failed' } finally { saving.value--; timers.delete(key) } }, 650)) }
+  function updateProjectField(id: number, field: ProjectField, value: string | number | null) { const project = projects.value.find((item) => item.id === id); if (!project) return; project[field] = value as never; schedule(`project-${id}`, async () => replaceProject(await request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ project: { [field]: value } }) }))) }
+  function updateSectionField(projectId: number, sectionId: number, title: string) { const section = projects.value.find((item) => item.id === projectId)?.sections.find((item) => item.id === sectionId); if (!section) return; section.title = title; schedule(`section-${sectionId}`, async () => replaceProject(await request<Project>(`/projects/${projectId}/sections/${sectionId}`, { method: 'PATCH', body: JSON.stringify({ section: { title } }) }))) }
+  function updateSubsectionField(projectId: number, sectionId: number, subsectionId: number, field: string, value: string | number | null) { const subsection = projects.value.find((item) => item.id === projectId)?.sections.find((item) => item.id === sectionId)?.subsections.find((item) => item.id === subsectionId); if (!subsection) return; (subsection as unknown as Record<string, unknown>)[field] = value; schedule(`subsection-${subsectionId}`, async () => replaceProject(await request<Project>(`/projects/${projectId}/sections/${sectionId}/subsections/${subsectionId}`, { method: 'PATCH', body: JSON.stringify({ subsection: { [field]: value } }) }))) }
+  async function addSection(projectId: number) { replaceProject(await request<Project>(`/projects/${projectId}/sections`, { method: 'POST', body: JSON.stringify({ section: { title: 'New section' } }) })) }
+  async function deleteSection(projectId: number, sectionId: number) { if (window.confirm('Delete this section and its subsections?')) replaceProject(await request<Project>(`/projects/${projectId}/sections/${sectionId}`, { method: 'DELETE' })) }
+  async function moveSection(projectId: number, sectionId: number, direction: 'up' | 'down') { replaceProject(await request<Project>(`/projects/${projectId}/sections/${sectionId}/${direction === 'up' ? 'move_up' : 'move_down'}`, { method: 'POST' })) }
+  async function addSubsection(projectId: number, sectionId: number) { replaceProject(await request<Project>(`/projects/${projectId}/sections/${sectionId}/subsections`, { method: 'POST', body: JSON.stringify({ subsection: {} }) })) }
+  async function deleteSubsection(projectId: number, sectionId: number, subsectionId: number) { if (window.confirm('Delete this subsection?')) replaceProject(await request<Project>(`/projects/${projectId}/sections/${sectionId}/subsections/${subsectionId}`, { method: 'DELETE' })) }
+  async function moveSubsection(projectId: number, sectionId: number, subsectionId: number, direction: 'up' | 'down') { replaceProject(await request<Project>(`/projects/${projectId}/sections/${sectionId}/subsections/${subsectionId}/${direction === 'up' ? 'move_up' : 'move_down'}`, { method: 'POST' })) }
+  return { projects, error, saveStateLabel, loadProjects, openProject, createProject, deleteProject, updateProjectField, updateSectionField, updateSubsectionField, addSection, deleteSection, moveSection, addSubsection, deleteSubsection, moveSubsection }
+})
