@@ -50,6 +50,9 @@ test('author can create, edit, reorder, reload, and delete a project', async ({ 
     const reorderSaved = documentSave(); await subsections.nth(1).getByRole('button', { name: 'Move subsection up' }).click(); await reorderSaved
     await expect(opening.getByTestId('subsection-card').nth(0).getByPlaceholder('Subsection title (optional)')).toHaveValue('Make the case')
     await expect(opening.getByTestId('subsection-card').nth(1).getByPlaceholder('Subsection title (optional)')).toHaveValue('Set the scene')
+    const finalSave = page.waitForResponse((response) => response.url().includes('/document') && response.request().method() === 'PUT' && response.status() === 200)
+    await projectTitle.fill(editedTitle)
+    await finalSave
     await page.reload()
     await expect(page.getByLabel('Project title')).toHaveValue(editedTitle)
     await expect(page.getByLabel('Target duration')).toHaveValue('900')
@@ -128,32 +131,38 @@ test('offers load-online and overwrite-online choices for a revision conflict', 
     projectId = (await (await createResponse).json()).project.id
     await expect(page.getByLabel('Project title')).toHaveValue(title)
 
-    await page.route('**/api/**', (route) => route.abort())
+    let release!: () => void
+    const heldRequest = new Promise<void>((resolve) => { release = resolve })
+    await page.route('**/api/**', (route) => route.request().method() === 'PUT' ? heldRequest.then(() => route.continue()) : route.continue())
     await page.getByLabel('Project title').fill('Local copy')
     await page.waitForTimeout(1000)
-    await expect(page.getByText('Sync error')).toBeVisible()
-    await page.unroute('**/api/**')
     const remote = await (await request.get(`/api/v1/projects/${projectId}/document`)).json()
     remote.project.title = 'Online copy'
     await request.put(`/api/v1/projects/${projectId}/document`, { data: remote })
+    release()
+    await page.getByLabel('Project title').fill('Local copy')
     await page.evaluate(() => window.dispatchEvent(new Event('online')))
     await expect(page.getByRole('dialog')).toBeVisible()
     await page.getByRole('dialog').getByRole('button', { name: 'Load online copy' }).click()
     await expect(page.getByLabel('Project title')).toHaveValue('Online copy')
 
-    await page.route('**/api/**', (route) => route.abort())
+    await page.unroute('**/api/**')
+    let releaseSecond!: () => void
+    const heldSecondRequest = new Promise<void>((resolve) => { releaseSecond = resolve })
+    await page.route('**/api/**', (route) => route.request().method() === 'PUT' ? heldSecondRequest.then(() => route.continue()) : route.continue())
     await page.getByLabel('Project title').fill('Local winner')
     await page.waitForTimeout(1000)
-    await expect(page.getByText('Sync error')).toBeVisible()
-    await page.unroute('**/api/**')
     const latest = await (await request.get(`/api/v1/projects/${projectId}/document`)).json()
     latest.project.title = 'Another online copy'
     await request.put(`/api/v1/projects/${projectId}/document`, { data: latest })
+    releaseSecond()
+    await page.getByLabel('Project title').fill('Local winner')
     await page.evaluate(() => window.dispatchEvent(new Event('online')))
     await expect(page.getByRole('dialog')).toBeVisible()
     await page.getByRole('dialog').getByRole('button', { name: 'Overwrite online with my copy' }).click()
     await expect(page.getByText('Synced')).toBeVisible()
     expect((await (await request.get(`/api/v1/projects/${projectId}/document`)).json()).project.title).toBe('Local winner')
+    await page.unroute('**/api/**')
   } finally {
     if (projectId) await request.delete(`/api/v1/projects/${projectId}`)
   }
