@@ -216,6 +216,24 @@ The JSON format is useful for backup, migration, external tooling, and handing a
 
 Scriptorium itself does not need to contain those external tools.
 
+## Project document contract
+
+The video project is the aggregate/document boundary. The canonical internal
+document is versioned with `schema_version: 1` and contains the project,
+ordered sections, and ordered subsections. Section and subsection array order
+is authoritative; persisted positions are normalized from those arrays.
+
+Projects have one aggregate `revision`, starting at `0` and incrementing after
+each successful whole-document update. The frontend sends the expected
+revision with the complete document. Rails rejects stale revisions with HTTP
+409 and applies valid replacements transactionally, so invalid documents do not
+partially change the project.
+
+The frontend edits its local Pinia document first and quietly debounces one
+project-document save. This is the persistence shape that the next phase will
+extend with durable offline-first storage; this phase does not add IndexedDB or
+background synchronization.
+
 ## Possible future users
 
 Scriptorium begins as a tool for its author.

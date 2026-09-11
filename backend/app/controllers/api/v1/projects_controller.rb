@@ -1,27 +1,37 @@
 module Api
   module V1
     class ProjectsController < BaseController
-      before_action :set_project, only: %i[show update destroy]
+      before_action :set_project, only: %i[show document update_document destroy]
 
       def index
-        render json: VideoProject.includes(sections: :subsections).order(:created_at).map { |project| serialize_project(project) }
+        render json: VideoProject.order(:created_at).map { |project| serialize_summary(project) }
       end
 
       def show
-        render json: serialize_project(@project)
+        render json: ProjectDocument.render(@project)
+      end
+
+      def document
+        render json: ProjectDocument.render(@project)
       end
 
       def create
         project = VideoProject.new(project_params)
         return render_errors(project) unless project.save
 
-        render json: serialize_project(project), status: :created
+        render json: ProjectDocument.render(project), status: :created
       end
 
-      def update
-        return render_errors(@project) unless @project.update(project_params)
+      def update_document
+        payload = body_params
+        return render json: { error: "Unsupported schema version" }, status: :unprocessable_entity unless payload["schema_version"].to_i == ProjectDocument::SCHEMA_VERSION
+        return render json: { error: "Revision conflict", document: ProjectDocument.render(@project) }, status: :conflict unless payload["revision"].to_i == @project.revision
 
-        render json: serialize_project(@project)
+        ProjectDocumentUpdater.new(@project, payload.fetch("project")).call
+        render json: ProjectDocument.render(@project.reload)
+      rescue KeyError, ActiveRecord::RecordInvalid => error
+        errors = error.respond_to?(:record) ? error.record.errors.to_hash : { document: [error.message] }
+        render json: { errors: errors }, status: :unprocessable_entity
       end
 
       def destroy
@@ -32,7 +42,7 @@ module Api
       private
 
       def set_project
-        @project = VideoProject.includes(sections: :subsections).find(request.path_parameters[:id])
+        @project = VideoProject.includes(sections: :subsections).find_by!(public_id: request.path_parameters[:id])
       rescue ActiveRecord::RecordNotFound
         render_not_found
       end
@@ -41,29 +51,17 @@ module Api
         body_params.fetch("project", {}).select { |key, _| %w[title target_duration_seconds].include?(key) }.symbolize_keys
       end
 
-      def serialize_project(project)
+      def serialize_summary(project)
         {
-          id: project.id,
+          id: project.public_id,
           title: project.title,
           target_duration_seconds: project.target_duration_seconds,
           planned_duration_seconds: project.planned_duration_seconds,
+          revision: project.revision,
+          sections: [],
           created_at: project.created_at,
           updated_at: project.updated_at,
-          sections: project.sections.map { |section| serialize_section(section) }
         }
-      end
-
-      def serialize_section(section)
-        {
-          id: section.id,
-          title: section.title,
-          position: section.position,
-          subsections: section.subsections.map { |subsection| serialize_subsection(subsection) }
-        }
-      end
-
-      def serialize_subsection(subsection)
-        subsection.attributes.slice("id", "title", "position", "viewer_sees", "explanation_notes", "script", "estimated_seconds")
       end
     end
   end

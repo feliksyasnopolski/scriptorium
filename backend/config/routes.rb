@@ -7,19 +7,10 @@ Rails.application.routes.draw do
 
   namespace :api do
     namespace :v1 do
-      resources :projects do
-        resources :sections do
-          member do
-            post :move_up
-            post :move_down
-          end
-
-          resources :subsections do
-            member do
-              post :move_up
-              post :move_down
-            end
-          end
+      resources :projects, only: %i[index create show destroy] do
+        member do
+          get :document
+          put :document, action: :update_document
         end
       end
     end

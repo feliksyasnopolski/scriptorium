@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -eu
+
+export BUNDLE_GEMFILE="${PWD}/backend/Gemfile"
+
+exec bundle exec foreman start -f Procfile.dev

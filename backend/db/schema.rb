@@ -10,16 +10,18 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_11_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_11_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
   create_table "sections", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.integer "position", null: false
+    t.string "public_id", null: false
     t.string "title", null: false
     t.datetime "updated_at", null: false
     t.bigint "video_project_id", null: false
+    t.index ["public_id"], name: "index_sections_on_public_id", unique: true
     t.index ["video_project_id", "position"], name: "index_sections_on_video_project_id_and_position"
     t.index ["video_project_id"], name: "index_sections_on_video_project_id"
   end
@@ -29,20 +31,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_000000) do
     t.integer "estimated_seconds"
     t.text "explanation_notes", default: "", null: false
     t.integer "position", null: false
+    t.string "public_id", null: false
     t.text "script", default: "", null: false
     t.bigint "section_id", null: false
     t.string "title"
     t.datetime "updated_at", null: false
     t.text "viewer_sees", default: "", null: false
+    t.index ["public_id"], name: "index_subsections_on_public_id", unique: true
     t.index ["section_id", "position"], name: "index_subsections_on_section_id_and_position"
     t.index ["section_id"], name: "index_subsections_on_section_id"
   end
 
   create_table "video_projects", force: :cascade do |t|
     t.datetime "created_at", null: false
+    t.string "public_id", null: false
+    t.integer "revision", default: 0, null: false
     t.integer "target_duration_seconds"
     t.string "title", null: false
     t.datetime "updated_at", null: false
+    t.index ["public_id"], name: "index_video_projects_on_public_id", unique: true
   end
 
   add_foreign_key "sections", "video_projects"

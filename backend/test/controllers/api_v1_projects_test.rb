@@ -1,39 +1,84 @@
 require "test_helper"
 
 class ApiV1ProjectsTest < ActionDispatch::IntegrationTest
-  test "project API returns ordered hierarchy and supports CRUD" do
+  test "reads and replaces the canonical document" do
     post "/api/v1/projects", params: { project: { title: "Lenovo Tab M11" } }
     assert_response :created
-    project_id = response.parsed_body.fetch("id")
+    document = response.parsed_body
+    project_id = document.dig("project", "id")
+    assert_equal 1, document.fetch("schema_version")
+    assert_equal 0, document.fetch("revision")
 
-    post "/api/v1/projects/#{project_id}/sections", params: { section: { title: "Opening" } }
-    assert_response :created
-    section_id = response.parsed_body.fetch("sections").first.fetch("id")
-    post "/api/v1/projects/#{project_id}/sections", params: { section: { title: "TCL11" } }
-    second_section_id = response.parsed_body.fetch("sections").last.fetch("id")
+    section_id = SecureRandom.uuid
+    subsection_id = SecureRandom.uuid
+    replacement = document.merge("project" => document.fetch("project").merge(
+      "title" => "Updated title",
+      "sections" => [{ "id" => section_id, "title" => "Opening", "subsections" => [{ "id" => subsection_id, "title" => nil, "viewer_sees" => "Visuals", "explanation_notes" => "Intent", "script" => "Hello", "estimated_seconds" => 90 }] }]
+    ))
 
-    post "/api/v1/projects/#{project_id}/sections/#{second_section_id}/move_up"
+    put "/api/v1/projects/#{project_id}/document", params: replacement.to_json, headers: { "CONTENT_TYPE" => "application/json" }
     assert_response :success
-    assert_equal [second_section_id, section_id], response.parsed_body.fetch("sections").map { |section| section.fetch("id") }
+    accepted = response.parsed_body
+    assert_equal 1, accepted.fetch("revision")
+    assert_equal "Updated title", accepted.dig("project", "title")
+    assert_equal [section_id], accepted.dig("project", "sections").map { |section| section.fetch("id") }
+    assert_equal [subsection_id], accepted.dig("project", "sections", 0, "subsections").map { |subsection| subsection.fetch("id") }
 
-    post "/api/v1/projects/#{project_id}/sections/#{second_section_id}/subsections", params: { subsection: { script: "Hello", estimated_seconds: 90 } }
-    assert_response :created
-    subsection_id = response.parsed_body.fetch("sections").first.fetch("subsections").first.fetch("id")
-    get "/api/v1/projects/#{project_id}"
-    assert_response :success
-    assert_equal "Hello", response.parsed_body.fetch("sections").first.fetch("subsections").first.fetch("script")
-    assert_equal 90, response.parsed_body.fetch("planned_duration_seconds")
+    get "/api/v1/projects/#{project_id}/document"
+    assert_equal accepted, response.parsed_body
+  end
 
-    patch "/api/v1/projects/#{project_id}/sections/#{second_section_id}/subsections/#{subsection_id}", params: { subsection: { script: "Updated" } }
+  test "rejects stale revisions without applying them" do
+    post "/api/v1/projects", params: { project: { title: "Original" } }
+    document = response.parsed_body
+    project_id = document.dig("project", "id")
+    document["project"]["title"] = "First update"
+    put "/api/v1/projects/#{project_id}/document", params: document.to_json, headers: { "CONTENT_TYPE" => "application/json" }
     assert_response :success
-    delete "/api/v1/projects/#{project_id}"
-    assert_response :no_content
-    assert_not VideoProject.exists?(project_id)
+
+    document["project"]["title"] = "Stale update"
+    put "/api/v1/projects/#{project_id}/document", params: document.to_json, headers: { "CONTENT_TYPE" => "application/json" }
+    assert_response :conflict
+    assert_equal "First update", response.parsed_body.dig("document", "project", "title")
+    assert_equal 1, response.parsed_body.dig("document", "revision")
+  end
+
+  test "invalid documents are atomic and reject unsupported schemas" do
+    post "/api/v1/projects", params: { project: { title: "Original" } }
+    document = response.parsed_body
+    project_id = document.dig("project", "id")
+    document["project"]["title"] = ""
+    put "/api/v1/projects/#{project_id}/document", params: document.to_json, headers: { "CONTENT_TYPE" => "application/json" }
+    assert_response :unprocessable_entity
+    assert_equal "Original", VideoProject.find_by!(public_id: project_id).title
+    assert_equal 0, VideoProject.find_by!(public_id: project_id).revision
+
+    document["project"]["title"] = "Changed"
+    document["schema_version"] = 99
+    put "/api/v1/projects/#{project_id}/document", params: document.to_json, headers: { "CONTENT_TYPE" => "application/json" }
+    assert_response :unprocessable_entity
+  end
+
+  test "normalizes array order and deletes omitted nested objects" do
+    post "/api/v1/projects", params: { project: { title: "Order test" } }
+    document = response.parsed_body
+    project_id = document.dig("project", "id")
+    ids = 2.times.map { SecureRandom.uuid }
+    document["project"]["sections"] = ids.map { |id| { "id" => id, "title" => id, "subsections" => [] } }.reverse
+    put "/api/v1/projects/#{project_id}/document", params: document.to_json, headers: { "CONTENT_TYPE" => "application/json" }
+    assert_response :success
+    assert_equal ids.reverse, response.parsed_body.dig("project", "sections").map { |section| section.fetch("id") }
+    assert_equal [1, 2], VideoProject.find_by!(public_id: project_id).sections.order(:position).map(&:position)
+
+    document = response.parsed_body
+    document["project"]["sections"] = [document["project"]["sections"].first]
+    put "/api/v1/projects/#{project_id}/document", params: document.to_json, headers: { "CONTENT_TYPE" => "application/json" }
+    assert_response :success
+    assert_equal 1, VideoProject.find_by!(public_id: project_id).sections.count
   end
 
   test "invalid project title returns useful JSON errors" do
     post "/api/v1/projects", params: { project: { title: "" } }
-
     assert_response :unprocessable_entity
     assert_equal ["can't be blank"], response.parsed_body.fetch("errors").fetch("title")
   end
