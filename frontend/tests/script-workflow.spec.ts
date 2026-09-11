@@ -28,7 +28,7 @@ test('author can create, edit, reorder, reload, and delete a project', async ({ 
     await page.getByRole('button', { name: '+ Add section' }).click()
     await expect(sections).toHaveCount(2)
     saved = projectPatch(); await sections.nth(1).getByLabel('Section title').fill('The practical answer'); await saved
-    await sections.nth(1).getByRole('button', { name: 'Move section up' }).click()
+    await page.locator('.tree-row').filter({ hasText: 'The practical answer' }).dragTo(page.locator('.tree-row').filter({ hasText: 'Opening: the question' }))
     await expect(sections.nth(0).getByLabel('Section title')).toHaveValue('The practical answer')
     await expect(sections.nth(1).getByLabel('Section title')).toHaveValue('Opening: the question')
 
@@ -43,11 +43,11 @@ test('author can create, edit, reorder, reload, and delete a project', async ({ 
     const firstSubsection = subsections.nth(0)
     subsectionSaved = documentSave(); await firstSubsection.getByLabel('Viewer sees').fill('A quiet trail, a packed notebook, and the first light over the ridge.'); await subsectionSaved
     subsectionSaved = documentSave(); await firstSubsection.getByLabel('Explanation / intent').fill('Establish why this story matters before introducing the route.'); await subsectionSaved
-    subsectionSaved = documentSave(); await firstSubsection.getByLabel('Script').fill('The best ideas usually arrive before the day gets noisy.'); await subsectionSaved
+    subsectionSaved = documentSave(); await firstSubsection.getByRole('textbox', { name: 'Script' }).fill('The best ideas usually arrive before the day gets noisy.'); await subsectionSaved
     subsectionSaved = documentSave(); await firstSubsection.getByLabel('Estimated seconds').fill('120'); await subsectionSaved
     await expect(page.getByText('Planned: 2:00')).toBeVisible()
 
-    const reorderSaved = documentSave(); await subsections.nth(1).getByRole('button', { name: 'Move subsection up' }).click(); await reorderSaved
+    const reorderSaved = documentSave(); await page.locator('.tree-row').filter({ hasText: 'Make the case' }).dragTo(page.locator('.tree-row').filter({ hasText: 'Set the scene' })); await reorderSaved
     await expect(opening.getByTestId('subsection-card').nth(0).getByPlaceholder('Subsection title (optional)')).toHaveValue('Make the case')
     await expect(opening.getByTestId('subsection-card').nth(1).getByPlaceholder('Subsection title (optional)')).toHaveValue('Set the scene')
     const finalSave = page.waitForResponse((response) => response.url().includes('/document') && response.request().method() === 'PUT' && response.status() === 200)
@@ -65,7 +65,7 @@ test('author can create, edit, reorder, reload, and delete a project', async ({ 
     await expect(editedSubsection.getByPlaceholder('Subsection title (optional)')).toHaveValue('Set the scene')
     await expect(editedSubsection.getByLabel('Viewer sees')).toHaveValue('A quiet trail, a packed notebook, and the first light over the ridge.')
     await expect(editedSubsection.getByLabel('Explanation / intent')).toHaveValue('Establish why this story matters before introducing the route.')
-    await expect(editedSubsection.getByLabel('Script')).toHaveValue('The best ideas usually arrive before the day gets noisy.')
+    await expect(editedSubsection.getByRole('textbox', { name: 'Script' })).toHaveValue('The best ideas usually arrive before the day gets noisy.')
     await expect(editedSubsection.getByLabel('Estimated seconds')).toHaveValue('120')
     await expect(page.getByText('Planned: 2:00')).toBeVisible()
 
@@ -98,14 +98,14 @@ test('keeps a synchronized project editable across blocked API traffic and reloa
     await page.getByRole('button', { name: '+ Add section' }).click()
     await page.getByTestId('section-card').getByLabel('Section title').fill('Offline opening')
     await page.getByTestId('section-card').getByRole('button', { name: '+ Add subsection' }).click()
-    await page.getByTestId('subsection-card').getByLabel('Script').fill('Writing continues without the server.')
+    await page.getByTestId('subsection-card').getByRole('textbox', { name: 'Script' }).fill('Writing continues without the server.')
     await expect(page.getByText('Saved locally')).toBeVisible()
     await page.waitForTimeout(1000)
 
     await page.reload()
     await expect(page.getByLabel('Project title')).toHaveValue(`${title} locally`)
     await expect(page.getByLabel('Section title')).toHaveValue('Offline opening')
-    await expect(page.getByLabel('Script')).toHaveValue('Writing continues without the server.')
+    await expect(page.getByRole('textbox', { name: 'Script' })).toHaveValue('Writing continues without the server.')
 
     await page.unroute('**/api/**')
     const synced = page.waitForResponse((response) => response.url().includes('/document') && response.request().method() === 'PUT')
@@ -163,6 +163,35 @@ test('offers load-online and overwrite-online choices for a revision conflict', 
     await expect(page.getByText('Synced')).toBeVisible()
     expect((await (await request.get(`/api/v1/projects/${projectId}/document`)).json()).project.title).toBe('Local winner')
     await page.unroute('**/api/**')
+  } finally {
+    if (projectId) await request.delete(`/api/v1/projects/${projectId}`)
+  }
+})
+
+test('moves subsections across sections and exports the local document', async ({ page, request }) => {
+  const title = `Export acceptance ${Date.now()}`
+  let projectId: string | undefined
+  try {
+    await page.goto('/')
+    const createResponse = page.waitForResponse((response) => response.url().endsWith('/api/v1/projects') && response.request().method() === 'POST')
+    await page.getByLabel('New project title').fill(title)
+    await page.getByRole('button', { name: '+ New project' }).click()
+    projectId = (await (await createResponse).json()).project.id
+    await page.getByRole('button', { name: '+ Add section' }).click()
+    await page.getByTestId('section-card').nth(0).getByLabel('Section title').fill('First section')
+    await page.getByRole('button', { name: '+ Add section' }).click()
+    await page.getByTestId('section-card').nth(1).getByLabel('Section title').fill('Second section')
+    await page.getByTestId('section-card').nth(0).getByRole('button', { name: '+ Add subsection' }).click()
+    await page.getByTestId('subsection-card').getByPlaceholder('Subsection title (optional)').fill('Moved subsection')
+    await page.locator('.tree-row').filter({ hasText: 'Moved subsection' }).dragTo(page.locator('.tree-row').filter({ hasText: 'Second section' }))
+    await expect(page.getByRole('button', { name: 'Moved subsection', exact: true })).toBeVisible()
+    await expect(page.getByTestId('section-card').nth(1).getByPlaceholder('Subsection title (optional)')).toHaveValue('Moved subsection')
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export Markdown' }).click()
+    expect((await download).suggestedFilename()).toBe(`${title.toLowerCase().replaceAll(' ', '-')}.md`)
+    await page.waitForTimeout(1000)
+    const server = await (await request.get(`/api/v1/projects/${projectId}/document`)).json()
+    expect(server.project.sections[1].subsections[0].title).toBe('Moved subsection')
   } finally {
     if (projectId) await request.delete(`/api/v1/projects/${projectId}`)
   }
