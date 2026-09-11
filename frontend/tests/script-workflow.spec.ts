@@ -196,3 +196,85 @@ test('moves subsections across sections and exports the local document', async (
     if (projectId) await request.delete(`/api/v1/projects/${projectId}`)
   }
 })
+
+test('tree navigation reaches the final card position on the first click', async ({ page, request }) => {
+  const title = `Navigation acceptance ${Date.now()}`
+  let projectId: string | undefined
+  try {
+    await page.goto('/')
+    const createResponse = page.waitForResponse((response) => response.url().endsWith('/api/v1/projects') && response.request().method() === 'POST')
+    await page.getByLabel('New project title').fill(title)
+    await page.getByRole('button', { name: '+ New project' }).click()
+    projectId = (await (await createResponse).json()).project.id
+
+    for (const [index, sectionTitle] of ['Opening', 'Middle', 'Closing'].entries()) {
+      await page.getByRole('button', { name: '+ Add section' }).click()
+      const section = page.getByTestId('section-card').nth(index)
+      await section.getByLabel('Section title').fill(sectionTitle)
+      await section.getByRole('button', { name: '+ Add subsection' }).click()
+      await section.getByRole('button', { name: '+ Add subsection' }).click()
+      await section.getByTestId('subsection-card').nth(0).getByPlaceholder('Subsection title (optional)').fill(`${sectionTitle} first`)
+      await section.getByTestId('subsection-card').nth(1).getByPlaceholder('Subsection title (optional)').fill(`${sectionTitle} second`)
+    }
+
+    const targetCard = page.getByTestId('subsection-card').nth(3)
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await page.getByRole('button', { name: 'Middle second', exact: true }).click()
+    await expect.poll(() => targetCard.evaluate((element) => element.getBoundingClientRect().top)).toBeGreaterThan(68)
+    await expect.poll(() => targetCard.evaluate((element) => element.getBoundingClientRect().top)).toBeLessThan(125)
+
+    await page.getByRole('button', { name: 'Closing', exact: true }).click()
+    await expect.poll(() => page.getByTestId('section-card').nth(2).evaluate((element) => element.getBoundingClientRect().top)).toBeGreaterThan(68)
+    await expect.poll(() => page.getByTestId('section-card').nth(2).evaluate((element) => element.getBoundingClientRect().top)).toBeLessThan(125)
+  } finally {
+    if (projectId) await request.delete(`/api/v1/projects/${projectId}`)
+  }
+})
+
+test('tree drag shows source and exact insertion markers', async ({ page, request }) => {
+  const title = `Drag affordance acceptance ${Date.now()}`
+  let projectId: string | undefined
+  try {
+    await page.goto('/')
+    const createResponse = page.waitForResponse((response) => response.url().endsWith('/api/v1/projects') && response.request().method() === 'POST')
+    await page.getByLabel('New project title').fill(title)
+    await page.getByRole('button', { name: '+ New project' }).click()
+    projectId = (await (await createResponse).json()).project.id
+    await page.getByRole('button', { name: '+ Add section' }).click()
+    await page.getByTestId('section-card').nth(0).getByLabel('Section title').fill('First section')
+    await page.getByTestId('section-card').nth(0).getByRole('button', { name: '+ Add subsection' }).click()
+    await page.getByTestId('section-card').nth(0).getByRole('button', { name: '+ Add subsection' }).click()
+    await page.getByTestId('subsection-card').nth(0).getByPlaceholder('Subsection title (optional)').fill('First subsection')
+    await page.getByTestId('subsection-card').nth(1).getByPlaceholder('Subsection title (optional)').fill('Second subsection')
+    await page.getByRole('button', { name: '+ Add section' }).click()
+    await page.getByTestId('section-card').nth(1).getByLabel('Section title').fill('Second section')
+    await page.getByTestId('section-card').nth(1).getByRole('button', { name: '+ Add subsection' }).click()
+    await page.getByTestId('subsection-card').nth(2).getByPlaceholder('Subsection title (optional)').fill('Destination subsection')
+
+    await page.evaluate(() => {
+      const source = [...document.querySelectorAll('.tree-row')].find((row) => row.textContent?.includes('Second subsection')) as HTMLElement
+      const destination = [...document.querySelectorAll('.tree-row')].find((row) => row.textContent?.includes('Destination subsection')) as HTMLElement
+      const dataTransfer = new DataTransfer()
+      dataTransfer.setData('application/x-scriptorium-item', JSON.stringify({ kind: 'subsection', id: source.dataset.id, sectionId: source.dataset.sectionId }))
+      source.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }))
+      destination.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientY: destination.getBoundingClientRect().top + 1, dataTransfer }))
+    })
+    await expect(page.locator('.tree-row.drag-source')).toContainText('Second subsection')
+    await expect(page.getByTestId('subsection-insertion-marker')).toHaveCount(1)
+    await page.locator('.tree-row').filter({ hasText: 'Destination subsection' }).dispatchEvent('drop')
+    await expect(page.locator('.tree-row').filter({ hasText: 'Second subsection' }).locator('xpath=..')).toContainText('Second subsection')
+    await expect(page.getByTestId('section-card').nth(1).getByTestId('subsection-card').nth(0).getByPlaceholder('Subsection title (optional)')).toHaveValue('Second subsection')
+
+    await page.evaluate(() => {
+      const source = [...document.querySelectorAll('.tree-row')].find((row) => row.textContent?.includes('First section')) as HTMLElement
+      const destination = [...document.querySelectorAll('.tree-row')].find((row) => row.textContent?.includes('Second section')) as HTMLElement
+      const dataTransfer = new DataTransfer()
+      dataTransfer.setData('application/x-scriptorium-item', JSON.stringify({ kind: 'section', id: source.dataset.id }))
+      source.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }))
+      destination.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientY: destination.getBoundingClientRect().top + 1, dataTransfer }))
+    })
+    await expect(page.getByTestId('section-insertion-marker')).toHaveCount(1)
+  } finally {
+    if (projectId) await request.delete(`/api/v1/projects/${projectId}`)
+  }
+})

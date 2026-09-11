@@ -10,6 +10,10 @@ const newTitle = ref('')
 const currentProject = computed(() => routeProjectId.value ? store.projects.find((project) => project.id === routeProjectId.value) : null)
 const sidebarOpen = ref(false)
 const activeItem = ref('')
+type DragItem = { kind: 'section' | 'subsection'; id: string; sectionId?: string }
+type DropTarget = { kind: 'section' | 'subsection'; sectionId?: string; index: number }
+const dragItem = ref<DragItem | null>(null)
+const dropTarget = ref<DropTarget | null>(null)
 let observer: IntersectionObserver | undefined
 
 onMounted(async () => {
@@ -25,10 +29,70 @@ async function openProject(id: string) { routeProjectId.value = id; history.repl
 function goHome() { routeProjectId.value = null; history.replaceState({}, '', window.location.pathname) }
 function conflictProject() { return routeProjectId.value ? store.conflicts[routeProjectId.value] : undefined }
 function editorId(kind: 'section' | 'subsection', id: string) { return 'editor-' + kind + '-' + id }
-function focusEditor(kind: 'section' | 'subsection', id: string) { const element = document.getElementById(editorId(kind, id)); element?.scrollIntoView({ behavior: 'smooth', block: 'start' }); element?.querySelector('input')?.focus(); activeItem.value = id; sidebarOpen.value = false }
-function startDrag(event: DragEvent, kind: 'section' | 'subsection', id: string, sectionId?: string) { event.dataTransfer?.setData('application/x-scriptorium-item', JSON.stringify({ kind, id, sectionId })); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move' }
-function dropItem(event: DragEvent, targetKind: 'section' | 'subsection', targetId: string, targetSectionId?: string) { event.preventDefault(); const raw = event.dataTransfer?.getData('application/x-scriptorium-item'); if (!raw || !currentProject.value) return; const source = JSON.parse(raw) as { kind: 'section' | 'subsection'; id: string; sectionId?: string }; if (source.kind === 'section' && targetKind === 'section') { const index = currentProject.value.sections.findIndex((section) => section.id === targetId); if (index >= 0) store.reorderSection(currentProject.value.id, source.id, index) } else if (source.kind === 'subsection' && targetKind === 'section' && source.sectionId) { const section = currentProject.value.sections.find((item) => item.id === targetId); if (section) store.moveSubsectionTo(currentProject.value.id, source.sectionId, source.id, targetId, section.subsections.length) } else if (source.kind === 'subsection' && targetKind === 'subsection' && targetSectionId && source.sectionId) { const section = currentProject.value.sections.find((item) => item.id === targetSectionId); const index = section?.subsections.findIndex((item) => item.id === targetId); if (section && index != null && index >= 0) store.moveSubsectionTo(currentProject.value.id, source.sectionId, source.id, targetSectionId, index) } }
-function dropIntoSection(event: DragEvent, sectionId: string) { event.preventDefault(); const raw = event.dataTransfer?.getData('application/x-scriptorium-item'); if (!raw || !currentProject.value) return; const source = JSON.parse(raw) as { kind: 'section' | 'subsection'; id: string; sectionId?: string }; const section = currentProject.value.sections.find((item) => item.id === sectionId); if (source.kind === 'subsection' && source.sectionId && section) store.moveSubsectionTo(currentProject.value.id, source.sectionId, source.id, sectionId, section.subsections.length) }
+function focusEditor(kind: 'section' | 'subsection', id: string) {
+  const element = document.getElementById(editorId(kind, id))
+  if (element) {
+    const header = document.querySelector('.topbar')?.getBoundingClientRect().height ?? 0
+    window.scrollTo({ top: Math.max(0, window.scrollY + element.getBoundingClientRect().top - header - 16), behavior: 'smooth' })
+    element.querySelector('input')?.focus({ preventScroll: true })
+  }
+  activeItem.value = id
+  sidebarOpen.value = false
+}
+function readDragItem(event: DragEvent): DragItem | null {
+  const raw = event.dataTransfer?.getData('application/x-scriptorium-item')
+  if (!raw) return dragItem.value
+  try { return JSON.parse(raw) as DragItem } catch { return null }
+}
+function startDrag(event: DragEvent, kind: 'section' | 'subsection', id: string, sectionId?: string) {
+  dragItem.value = { kind, id, sectionId }
+  dropTarget.value = null
+  event.dataTransfer?.setData('application/x-scriptorium-item', JSON.stringify(dragItem.value))
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+}
+function endDrag() { dragItem.value = null; dropTarget.value = null }
+function setDropTarget(event: DragEvent, targetKind: 'section' | 'subsection', targetId: string, targetSectionId?: string) {
+  const source = readDragItem(event)
+  const project = currentProject.value
+  if (!source || !project) return
+  if (targetKind === 'section') {
+    const sectionIndex = project.sections.findIndex((section) => section.id === targetId)
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+    const index = sectionIndex + (event.clientY > rect.top + rect.height / 2 ? 1 : 0)
+    if (source.kind === 'section' && source.id !== targetId && sectionIndex >= 0) dropTarget.value = { kind: 'section', index }
+    else if (source.kind === 'subsection' && source.sectionId && sectionIndex >= 0) dropTarget.value = { kind: 'subsection', sectionId: targetId, index: project.sections[sectionIndex].subsections.length }
+    return
+  }
+  if (source.kind !== 'subsection' || !targetSectionId || source.id === targetId) return
+  const section = project.sections.find((item) => item.id === targetSectionId)
+  const subsectionIndex = section?.subsections.findIndex((item) => item.id === targetId) ?? -1
+  if (!section || subsectionIndex < 0) return
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  dropTarget.value = { kind: 'subsection', sectionId: targetSectionId, index: subsectionIndex + (event.clientY > rect.top + rect.height / 2 ? 1 : 0) }
+}
+function setSectionEndTarget(event: DragEvent, sectionId: string) {
+  const source = readDragItem(event)
+  const section = currentProject.value?.sections.find((item) => item.id === sectionId)
+  if (source?.kind === 'subsection' && source.sectionId && section) dropTarget.value = { kind: 'subsection', sectionId, index: section.subsections.length }
+}
+function dropItem(event: DragEvent, ..._ignored: unknown[]) {
+  event.preventDefault()
+  const source = readDragItem(event)
+  const target = dropTarget.value
+  const project = currentProject.value
+  if (!source || !target || !project) return
+  if (source.kind === 'section' && target.kind === 'section') store.reorderSection(project.id, source.id, target.index)
+  else if (source.kind === 'subsection' && target.kind === 'subsection' && source.sectionId && target.sectionId) store.moveSubsectionTo(project.id, source.sectionId, source.id, target.sectionId, target.index)
+  endDrag()
+}
+function dropIntoSection(event: DragEvent, sectionId: string) {
+  event.preventDefault()
+  const source = readDragItem(event)
+  const target = dropTarget.value
+  const project = currentProject.value
+  if (source?.kind === 'subsection' && source.sectionId && target?.kind === 'subsection' && project) store.moveSubsectionTo(project.id, source.sectionId, source.id, sectionId, target.index)
+  endDrag()
+}
 function safeName(title: string) { return (title.trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').toLowerCase() || 'scriptorium-project').slice(0, 80) }
 function download(content: string, extension: string, type: string) { const blob = new Blob([content], { type }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = safeName(currentProject.value?.title ?? '') + '.' + extension; link.click(); URL.revokeObjectURL(link.href) }
 function exportJson() { if (!currentProject.value) return; const document: ProjectDocument = { schema_version: DOCUMENT_SCHEMA_VERSION, revision: currentProject.value.revision, project: currentProject.value }; download(JSON.stringify(document, null, 2), 'json', 'application/json') }
@@ -49,7 +113,7 @@ function observeEditor(element: unknown) { if (element instanceof Element) nextT
     </section>
     <section v-else class="page-content editor-page">
       <button class="sidebar-toggle" type="button" @click="sidebarOpen = !sidebarOpen">Structure</button>
-      <aside class="script-tree" :class="{ 'is-open': sidebarOpen }"><div class="tree-heading"><span>Structure</span><button class="sidebar-close" type="button" aria-label="Close structure" @click="sidebarOpen = false">×</button></div><nav aria-label="Script structure"><div v-for="section in currentProject.sections" :key="section.id" class="tree-section"><div class="tree-row" :class="{ active: activeItem === section.id }" draggable="true" @dragstart="startDrag($event, 'section', section.id)" @dragover.prevent @drop="dropItem($event, 'section', section.id)"><span class="drag-handle" aria-hidden="true">⠿</span><button class="tree-label" type="button" @click="focusEditor('section', section.id)">{{ section.title || 'Untitled section' }}</button></div><div v-for="subsection in section.subsections" :key="subsection.id" class="tree-row subsection-row" :class="{ active: activeItem === subsection.id }" draggable="true" @dragstart="startDrag($event, 'subsection', subsection.id, section.id)" @dragover.prevent @drop="dropItem($event, 'subsection', subsection.id, section.id)"><span class="drag-handle" aria-hidden="true">⠿</span><button class="tree-label" type="button" @click="focusEditor('subsection', subsection.id)">{{ subsection.title || 'Untitled subsection' }}</button></div><div class="tree-section-drop" @dragover.prevent @drop="dropIntoSection($event, section.id)"></div></div></nav></aside>
+      <aside class="script-tree" :class="{ 'is-open': sidebarOpen }"><div class="tree-heading"><span>Structure</span><button class="sidebar-close" type="button" aria-label="Close structure" @click="sidebarOpen = false">×</button></div><nav aria-label="Script structure"><div v-for="(section, sectionIndex) in currentProject.sections" :key="section.id" class="tree-section"><div v-if="dropTarget?.kind === 'section' && dropTarget.index === sectionIndex" class="tree-insertion-marker" data-testid="section-insertion-marker" aria-label="Section insertion position"></div><div class="tree-row" :class="{ active: activeItem === section.id, 'drag-source': dragItem?.id === section.id }" draggable="true" @dragstart="startDrag($event, 'section', section.id)" @dragend="endDrag" @dragover.prevent="setDropTarget($event, 'section', section.id)" @drop="dropItem($event, 'section', section.id)"><span class="drag-handle" aria-hidden="true">⠿</span><button class="tree-label" type="button" @click="focusEditor('section', section.id)">{{ section.title || 'Untitled section' }}</button></div><div v-for="(subsection, subsectionIndex) in section.subsections" :key="subsection.id"><div v-if="dropTarget?.kind === 'subsection' && dropTarget.sectionId === section.id && dropTarget.index === subsectionIndex" class="tree-insertion-marker subsection-insertion-marker" data-testid="subsection-insertion-marker" aria-label="Subsection insertion position"></div><div class="tree-row subsection-row" :class="{ active: activeItem === subsection.id, 'drag-source': dragItem?.id === subsection.id }" draggable="true" @dragstart="startDrag($event, 'subsection', subsection.id, section.id)" @dragend="endDrag" @dragover.prevent="setDropTarget($event, 'subsection', subsection.id, section.id)" @drop="dropItem($event, 'subsection', subsection.id, section.id)"><span class="drag-handle" aria-hidden="true">⠿</span><button class="tree-label" type="button" @click="focusEditor('subsection', subsection.id)">{{ subsection.title || 'Untitled subsection' }}</button></div></div><div class="tree-section-drop" :class="{ 'is-drop-target': dropTarget?.kind === 'subsection' && dropTarget.sectionId === section.id && dropTarget.index === section.subsections.length }" @dragover.prevent="setSectionEndTarget($event, section.id)" @drop="dropIntoSection($event, section.id)"><div v-if="dropTarget?.kind === 'subsection' && dropTarget.sectionId === section.id && dropTarget.index === section.subsections.length" class="tree-insertion-marker subsection-insertion-marker" data-testid="subsection-insertion-marker" aria-label="Subsection insertion position"></div></div></div><div v-if="dropTarget?.kind === 'section' && dropTarget.index === currentProject.sections.length" class="tree-insertion-marker" data-testid="section-insertion-marker" aria-label="Section insertion position"></div></nav></aside>
       <div class="editor-heading"><button class="back-button" type="button" @click="goHome">← Projects</button><div class="project-fields"><input class="project-title" :value="currentProject.title" aria-label="Project title" @input="store.updateProjectField(currentProject.id, 'title', ($event.target as HTMLInputElement).value)" /><label>Target duration <input type="number" min="0" :value="currentProject.target_duration_seconds ?? ''" @input="store.updateProjectField(currentProject.id, 'target_duration_seconds', ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))" /> seconds</label></div><div class="timing-block"><span v-if="currentProject.target_duration_seconds != null">Target: {{ formatDuration(currentProject.target_duration_seconds) }}</span><span>Planned: {{ formatDuration(plannedDurationSeconds(currentProject)) }}</span></div></div>
       <div class="export-actions"><button type="button" @click="exportJson">Export JSON</button><button type="button" @click="exportMarkdown">Export Markdown</button></div>
       <div v-for="section in currentProject.sections" :key="section.id" :id="editorId('section', section.id)" :ref="observeEditor" data-testid="section-card" class="section-card">
