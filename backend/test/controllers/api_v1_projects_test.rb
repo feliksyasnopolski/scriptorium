@@ -77,6 +77,29 @@ class ApiV1ProjectsTest < ActionDispatch::IntegrationTest
     assert_equal 1, VideoProject.find_by!(public_id: project_id).sections.count
   end
 
+  test "moves an existing subsection between sections without changing its id" do
+    post "/api/v1/projects", params: { project: { title: "Move test" } }
+    document = response.parsed_body
+    project_id = document.dig("project", "id")
+    first_section_id = SecureRandom.uuid
+    second_section_id = SecureRandom.uuid
+    subsection_id = SecureRandom.uuid
+    document["project"]["sections"] = [
+      { "id" => first_section_id, "title" => "First", "subsections" => [{ "id" => subsection_id, "title" => "Moved", "viewer_sees" => "", "explanation_notes" => "", "script" => "", "estimated_seconds" => nil }] },
+      { "id" => second_section_id, "title" => "Second", "subsections" => [] }
+    ]
+    put "/api/v1/projects/#{project_id}/document", params: document.to_json, headers: { "CONTENT_TYPE" => "application/json" }
+    assert_response :success
+
+    document = response.parsed_body
+    document["project"]["sections"][0]["subsections"] = []
+    document["project"]["sections"][1]["subsections"] = [{ "id" => subsection_id, "title" => "Moved", "viewer_sees" => "", "explanation_notes" => "", "script" => "", "estimated_seconds" => nil }]
+    put "/api/v1/projects/#{project_id}/document", params: document.to_json, headers: { "CONTENT_TYPE" => "application/json" }
+    assert_response :success
+    assert_equal subsection_id, response.parsed_body.dig("project", "sections", 1, "subsections", 0, "id")
+    assert_equal 1, Subsection.where(public_id: subsection_id).count
+  end
+
   test "invalid project title returns useful JSON errors" do
     post "/api/v1/projects", params: { project: { title: "" } }
     assert_response :unprocessable_entity
