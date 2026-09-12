@@ -24,13 +24,13 @@ watch(() => auth.user?.id, async (id, previous) => { if (id && id !== previous) 
 
 async function createProject(title: string) {
   const project = await store.createProject(title || 'Untitled project')
-  await openProject(project.id)
+  await openProject(project.id, false)
 }
 async function logout() { await auth.logout() }
-async function openProject(id: string) {
+async function openProject(id: string, load = true) {
   routeProjectId.value = id
   history.replaceState({}, '', `?project=${id}`)
-  await store.openProject(id)
+  if (load) await store.openProject(id)
 }
 function goHome() {
   routeProjectId.value = null
