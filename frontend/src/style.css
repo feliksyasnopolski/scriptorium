@@ -1,6 +1,7 @@
 :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #25231f; background: #f7f5f0; font-synthesis: none; text-rendering: optimizeLegibility; }
 * { box-sizing: border-box; } body { margin: 0; min-width: 320px; } button, input, textarea { font: inherit; } button { cursor: pointer; }
 .app-shell { min-height: 100vh; } .topbar { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 5vw; border-bottom: 1px solid #dedbd3; background: #fbfaf7; }
+.hidden-file-input { display: none; }
 .wordmark { border: 0; background: none; padding: 0; font-weight: 700; font-size: 1.15rem; color: #25231f; } .save-state { color: #777269; font-size: .85rem; }
 .page-content { width: min(1180px, 90vw); margin: 0 auto; padding: 64px 0; } .page-heading, .editor-heading { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 38px; }
 .eyebrow { margin: 0 0 8px; color: #8b6d4e; text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; font-weight: 700; } h1, h2 { margin: 0; font-weight: 650; letter-spacing: -.03em; } h1 { font-size: clamp(2.3rem, 5vw, 4.2rem); } h2 { font-size: 1.35rem; }

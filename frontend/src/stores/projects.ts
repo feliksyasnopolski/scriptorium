@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { DOCUMENT_SCHEMA_VERSION, type Project, type ProjectDocument } from '../types'
+import { DOCUMENT_SCHEMA_VERSION, parseProjectDocument, type Project, type ProjectDocument } from '../types'
 
 type ProjectField = 'title' | 'target_duration_seconds'
 type SubsectionField = 'title' | 'viewer_sees' | 'explanation_notes' | 'script' | 'estimated_seconds'
@@ -10,6 +10,7 @@ type RequestError = Error & { status?: number; document?: ProjectDocument }
 
 const DB_NAME = 'scriptorium'; const STORE_NAME = 'projects'; const timers = new Map<string, ReturnType<typeof setTimeout>>(); const writes = new Map<string, Promise<void>>(); const syncing = new Set<string>()
 function newId() { return crypto.randomUUID() }
+function uniqueId(candidate: string, used: Set<string>) { if (!used.has(candidate)) { used.add(candidate); return candidate }; let generated = newId(); while (used.has(generated)) generated = newId(); used.add(generated); return generated }
 function db(): Promise<IDBDatabase> { return new Promise((resolve, reject) => { const r = indexedDB.open(DB_NAME, 1); r.onupgradeneeded = () => r.result.createObjectStore(STORE_NAME); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error) }) }
 async function localRecords(): Promise<LocalRecord[]> { const d = await db(); return new Promise((resolve, reject) => { const r = d.transaction(STORE_NAME).objectStore(STORE_NAME).getAll(); r.onsuccess = () => resolve(r.result as LocalRecord[]); r.onerror = () => reject(r.error) }) }
 async function localPut(record: LocalRecord) { const d = await db(); return new Promise<void>((resolve, reject) => { const r = d.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put(record, record.document.project.id); r.onsuccess = () => resolve(); r.onerror = () => reject(r.error) }) }
@@ -26,6 +27,21 @@ export const useProjectsStore = defineStore('projects', () => {
   async function persist(project: Project, state: SyncState, localOnly = false) { const copy = JSON.parse(JSON.stringify(project)) as Project; const record: LocalRecord = { document: { schema_version: DOCUMENT_SCHEMA_VERSION, revision: copy.revision, project: copy }, state, localOnly }; await localPut(record); setRecord(record) }
   async function openProject(id: string) { activeId.value = id; const cached = await localGet(id).catch(() => undefined); if (cached) setRecord(cached); if (!cached || cached.state === 'synced') { try { const document = await request<ProjectDocument>(`/projects/${id}/document`); await localPut({ document, state: 'synced' }); setRecord({ document, state: 'synced' }) } catch { if (!cached) error.value = 'Project is unavailable offline' } }; await syncProject(id) }
   async function createProject(title: string) { const project: Project = { id: newId(), title, target_duration_seconds: null, sections: [], revision: 0 }; if (!navigator.onLine) { await persist(project, 'offline', true); return project }; try { const document = await request<ProjectDocument>('/projects', { method: 'POST', body: JSON.stringify({ project: { title, id: project.id } }) }); await localPut({ document, state: 'synced' }); setRecord({ document, state: 'synced' }); return document.project } catch { await persist(project, 'offline', true); return project } }
+  async function importProject(raw: unknown, replaceId?: string) {
+    const imported = parseProjectDocument(raw)
+    const current = replaceId ? projectFor(replaceId) : undefined
+    if (replaceId && !current) throw new Error('The current project is no longer available')
+    const projectIds = new Set(projects.value.filter((project) => project.id !== replaceId).map((project) => project.id))
+    const sectionIds = new Set(projects.value.filter((project) => project.id !== replaceId).flatMap((project) => project.sections.map((section) => section.id)))
+    const subsectionIds = new Set(projects.value.filter((project) => project.id !== replaceId).flatMap((project) => project.sections.flatMap((section) => section.subsections.map((subsection) => subsection.id))))
+    const projectId = replaceId ?? uniqueId(imported.project.id, projectIds)
+    const sections = imported.project.sections.map((section) => ({ ...section, id: uniqueId(section.id, sectionIds), subsections: section.subsections.map((subsection) => ({ ...subsection, id: uniqueId(subsection.id, subsectionIds) })) }))
+    const project: Project = { id: projectId, title: imported.project.title, target_duration_seconds: imported.project.target_duration_seconds, sections, revision: current?.revision ?? 0 }
+    const localOnly = !replaceId
+    await persist(project, navigator.onLine ? 'dirty' : 'offline', localOnly)
+    if (navigator.onLine) await syncProject(project.id)
+    return project
+  }
   async function deleteProject(id: string) { if (!window.confirm('Delete this project?')) return; if (!navigator.onLine) { error.value = 'Project deletion requires a connection'; return }; await request(`/projects/${id}`, { method: 'DELETE' }); await localDelete(id); projects.value = projects.value.filter((p) => p.id !== id) }
   async function syncProject(id: string, force = false) { if (syncing.has(id)) return; syncing.add(id); try { await writes.get(id)?.catch(() => undefined); const record = await localGet(id).catch(() => undefined); if (!record || (record.state === 'synced' && !force)) return; record.state = 'syncing'; await localPut(record); setRecord(record); try { const localOnly = record.localOnly === true; const path = localOnly ? '/projects' : `/projects/${id}/document${force ? '?force=true' : ''}`; const body = localOnly ? { project: record.document.project } : record.document; const accepted = await request<ProjectDocument>(path, { method: localOnly ? 'POST' : 'PUT', body: JSON.stringify(body) }); await localPut({ document: accepted, state: 'synced' }); setRecord({ document: accepted, state: 'synced' }); delete conflicts.value[id]; error.value = '' } catch (reason) { const issue = reason as RequestError; if (issue.status === 409 && issue.document) { conflicts.value[id] = issue.document; record.state = 'conflict' } else { record.state = navigator.onLine ? 'error' : 'offline'; error.value = issue.message }; await localPut(record); setRecord(record) } } finally { syncing.delete(id); const latest = await localGet(id).catch(() => undefined); if (latest && latest.state === 'dirty') setTimeout(() => void syncProject(id), 0) } }
   async function syncDirty() { for (const record of await localRecords().catch(() => [])) if (record.state !== 'synced') await syncProject(record.document.project.id) }
@@ -45,5 +61,5 @@ export const useProjectsStore = defineStore('projects', () => {
   async function loadOnline(id: string) { const document = await request<ProjectDocument>(`/projects/${id}/document`); await localPut({ document, state: 'synced' }); setRecord({ document, state: 'synced' }); delete conflicts.value[id] }
   async function overwriteOnline(id: string) { await syncProject(id, true) }
   window.addEventListener('online', () => void syncDirty()); window.addEventListener('offline', () => Object.keys(states.value).forEach((id) => { if (states.value[id] !== 'synced') states.value[id] = 'offline' }))
-  return { projects, error, conflicts, saveStateLabel, loadProjects, openProject, createProject, deleteProject, updateProjectField, updateSectionField, updateSubsectionField, addSection, deleteSection, moveSection, reorderSection, addSubsection, deleteSubsection, moveSubsection, moveSubsectionTo, loadOnline, overwriteOnline }
+  return { projects, error, conflicts, saveStateLabel, loadProjects, openProject, createProject, importProject, deleteProject, updateProjectField, updateSectionField, updateSubsectionField, addSection, deleteSection, moveSection, reorderSection, addSubsection, deleteSubsection, moveSubsection, moveSubsectionTo, loadOnline, overwriteOnline }
 })

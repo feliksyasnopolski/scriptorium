@@ -278,3 +278,52 @@ test('tree drag shows source and exact insertion markers', async ({ page, reques
     if (projectId) await request.delete(`/api/v1/projects/${projectId}`)
   }
 })
+
+test('imports canonical JSON globally and replaces an existing project in place', async ({ page, request }) => {
+  const title = `Import acceptance ${Date.now()}`
+  let originalId: string | undefined
+  let importedId: string | undefined
+  try {
+    await page.goto('/')
+    const createResponse = page.waitForResponse((response) => response.url().endsWith('/api/v1/projects') && response.request().method() === 'POST')
+    await page.getByLabel('New project title').fill(title)
+    await page.getByRole('button', { name: '+ New project' }).click()
+    originalId = (await (await createResponse).json()).project.id
+    await page.getByRole('button', { name: '+ Add section' }).click()
+    await page.getByTestId('section-card').getByLabel('Section title').fill('Imported section')
+    await page.getByTestId('section-card').getByRole('button', { name: '+ Add subsection' }).click()
+    await page.getByTestId('subsection-card').getByPlaceholder('Subsection title (optional)').fill('Imported subsection')
+    await page.getByTestId('subsection-card').getByRole('textbox', { name: 'Script' }).fill('Portable script content.')
+    await page.getByLabel('Target duration').fill('600')
+    await expect(page.getByText('Synced')).toBeVisible()
+
+    const exported = await (await request.get(`/api/v1/projects/${originalId}/document`)).json()
+    const input = page.locator('input[type="file"]')
+    await page.getByRole('button', { name: '← Projects' }).click()
+    await input.setInputFiles({ name: 'project.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)) })
+    await expect(page.getByLabel('Project title')).toHaveValue(title)
+    importedId = new URL(page.url()).searchParams.get('project') ?? undefined
+    expect(importedId).toBeTruthy()
+    expect(importedId).not.toBe(originalId)
+    await expect(page.getByLabel('Section title')).toHaveValue('Imported section')
+    await expect(page.getByRole('textbox', { name: 'Script' })).toHaveValue('Portable script content.')
+    await expect(page.getByLabel('Target duration')).toHaveValue('600')
+
+    await page.getByLabel('Project title').fill('Changed before replacement')
+    await page.waitForTimeout(700)
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByRole('button', { name: 'Import JSON' }).click()
+    await input.setInputFiles({ name: 'project.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)) })
+    await expect(page.getByLabel('Project title')).toHaveValue(title)
+    expect(new URL(page.url()).searchParams.get('project')).toBe(importedId)
+
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByRole('button', { name: 'Import JSON' }).click()
+    await input.setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{"schema_version": 99}') })
+    await expect(page.locator('.error-message')).toContainText('Unsupported schema version')
+    await expect(page.getByLabel('Project title')).toHaveValue(title)
+  } finally {
+    if (originalId) await request.delete(`/api/v1/projects/${originalId}`)
+    if (importedId) await request.delete(`/api/v1/projects/${importedId}`)
+  }
+})
