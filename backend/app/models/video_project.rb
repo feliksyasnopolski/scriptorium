@@ -1,4 +1,5 @@
 class VideoProject < ApplicationRecord
+  belongs_to :user, inverse_of: :video_projects
   has_many :sections, -> { order(:position) }, dependent: :destroy, inverse_of: :video_project
 
   validates :title, presence: true

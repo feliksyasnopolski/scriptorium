@@ -10,9 +10,20 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_11_010000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_12_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "device_sessions", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "last_used_at"
+    t.datetime "revoked_at"
+    t.string "token_digest", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["token_digest"], name: "index_device_sessions_on_token_digest", unique: true
+    t.index ["user_id"], name: "index_device_sessions_on_user_id"
+  end
 
   create_table "sections", force: :cascade do |t|
     t.datetime "created_at", null: false
@@ -42,6 +53,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_010000) do
     t.index ["section_id"], name: "index_subsections_on_section_id"
   end
 
+  create_table "users", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "encrypted_password", null: false
+    t.string "public_id", null: false
+    t.datetime "updated_at", null: false
+    t.string "username", null: false
+    t.index "lower((username)::text)", name: "index_users_on_lower_username", unique: true
+    t.index ["public_id"], name: "index_users_on_public_id", unique: true
+  end
+
   create_table "video_projects", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "public_id", null: false
@@ -49,9 +70,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_010000) do
     t.integer "target_duration_seconds"
     t.string "title", null: false
     t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
     t.index ["public_id"], name: "index_video_projects_on_public_id", unique: true
+    t.index ["user_id"], name: "index_video_projects_on_user_id"
   end
 
+  add_foreign_key "device_sessions", "users"
   add_foreign_key "sections", "video_projects"
   add_foreign_key "subsections", "sections"
+  add_foreign_key "video_projects", "users"
 end

@@ -1,4 +1,26 @@
-import { expect, test } from '@playwright/test'
+import { expect, test as base, type APIRequestContext } from '@playwright/test'
+
+type AuthContext = { context: APIRequestContext; token: string; user: { id: string; username: string } }
+const test = base.extend<{ auth: AuthContext }>({
+  auth: async ({ playwright }, use) => {
+    const context = await playwright.request.newContext({ baseURL: 'http://127.0.0.1:3000' })
+    const response = await context.post('/api/v1/auth/signup', { data: { username: `playwright-${Date.now()}-${Math.random().toString(16).slice(2)}`, password: 'password123', password_confirmation: 'password123' } })
+    const body = await response.json()
+    await context.dispose()
+    const authenticatedContext = await playwright.request.newContext({ baseURL: 'http://127.0.0.1:3000', extraHTTPHeaders: { Authorization: `Bearer ${body.token}` } })
+    await use({ context: authenticatedContext, token: body.token, user: body.user })
+    await authenticatedContext.dispose()
+  },
+  request: async ({ auth }, use) => use(auth.context),
+  page: async ({ page, auth }, use) => {
+    await page.addInitScript((stored) => {
+      const open = indexedDB.open('scriptorium', 2)
+      open.onupgradeneeded = () => { if (!open.result.objectStoreNames.contains('projects')) open.result.createObjectStore('projects'); if (!open.result.objectStoreNames.contains('auth')) open.result.createObjectStore('auth') }
+      open.onsuccess = () => open.result.transaction('auth', 'readwrite').objectStore('auth').put(stored, 'current')
+    }, { token: auth.token, user: auth.user })
+    await use(page)
+  },
+})
 
 test('author can create, edit, reorder, reload, and delete a project', async ({ page, request }) => {
   const title = `Browser acceptance ${Date.now()}`
@@ -93,6 +115,7 @@ test('keeps a synchronized project editable across blocked API traffic and reloa
     projectId = (await (await createResponse).json()).project.id
     await expect(page.getByLabel('Project title')).toHaveValue(title)
     await page.route('**/api/**', (route) => route.abort())
+    await page.evaluate(() => Object.defineProperty(navigator, 'onLine', { configurable: true, value: false }))
 
     await page.getByLabel('Project title').fill(`${title} locally`)
     await page.getByRole('button', { name: '+ Add section' }).click()
@@ -100,14 +123,14 @@ test('keeps a synchronized project editable across blocked API traffic and reloa
     await page.getByTestId('section-card').getByRole('button', { name: '+ Add subsection' }).click()
     await page.getByTestId('subsection-card').getByRole('textbox', { name: 'Script' }).fill('Writing continues without the server.')
     await expect(page.getByText('Saved locally')).toBeVisible()
-    await page.waitForTimeout(1000)
-
+    await page.waitForTimeout(2500)
     await page.reload()
     await expect(page.getByLabel('Project title')).toHaveValue(`${title} locally`)
     await expect(page.getByLabel('Section title')).toHaveValue('Offline opening')
     await expect(page.getByRole('textbox', { name: 'Script' })).toHaveValue('Writing continues without the server.')
 
     await page.unroute('**/api/**')
+    await page.evaluate(() => Object.defineProperty(navigator, 'onLine', { configurable: true, value: true }))
     const synced = page.waitForResponse((response) => response.url().includes('/document') && response.request().method() === 'PUT')
     await page.evaluate(() => window.dispatchEvent(new Event('online')))
     await synced

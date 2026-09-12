@@ -4,7 +4,7 @@ module Api
       before_action :set_project, only: %i[show document update_document destroy]
 
       def index
-        render json: VideoProject.order(:created_at).map { |project| serialize_summary(project) }
+        render json: current_user.video_projects.order(:created_at).map { |project| serialize_summary(project) }
       end
 
       def show
@@ -16,7 +16,7 @@ module Api
       end
 
       def create
-        project = VideoProject.new(project_params)
+        project = current_user.video_projects.new(project_params)
         return render_errors(project) unless project.save
 
         ProjectDocumentUpdater.new(project, body_params.fetch("project")).call if body_params.dig("project", "sections")
@@ -45,7 +45,7 @@ module Api
       private
 
       def set_project
-        @project = VideoProject.includes(sections: :subsections).find_by!(public_id: request.path_parameters[:id])
+        @project = current_user.video_projects.includes(sections: :subsections).find_by!(public_id: request.path_parameters[:id])
       rescue ActiveRecord::RecordNotFound
         render_not_found
       end

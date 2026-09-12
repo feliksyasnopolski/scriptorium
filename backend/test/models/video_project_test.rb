@@ -1,8 +1,10 @@
 require "test_helper"
 
 class VideoProjectTest < ActiveSupport::TestCase
+  setup { @user = User.create!(username: "model-test-#{SecureRandom.hex(4)}", password: "password123") }
+
   test "planned duration sums only estimated subsections" do
-    project = VideoProject.create!(title: "Test project")
+    project = VideoProject.create!(title: "Test project", user: @user)
     section = project.sections.create!(title: "Opening", position: 1)
     section.subsections.create!(position: 1, estimated_seconds: 30)
     section.subsections.create!(position: 2, estimated_seconds: nil)
@@ -11,7 +13,7 @@ class VideoProjectTest < ActiveSupport::TestCase
   end
 
   test "deleting a project deletes its hierarchy" do
-    project = VideoProject.create!(title: "Test project")
+    project = VideoProject.create!(title: "Test project", user: @user)
     section = project.sections.create!(title: "Opening", position: 1)
     subsection = section.subsections.create!(position: 1)
 

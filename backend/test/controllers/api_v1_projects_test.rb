@@ -1,6 +1,20 @@
 require "test_helper"
 
 class ApiV1ProjectsTest < ActionDispatch::IntegrationTest
+  setup do
+    @user = User.create!(username: "project-test-#{SecureRandom.hex(4)}", password: "password123")
+    _session, @token = DeviceSession.issue!(@user)
+  end
+
+  def auth_headers
+    { "Authorization" => "Bearer #{@token}" }
+  end
+
+  def get(path, **options) = super(path, **options.merge(headers: auth_headers.merge(options[:headers] || {})))
+  def post(path, **options) = super(path, **options.merge(headers: auth_headers.merge(options[:headers] || {})))
+  def put(path, **options) = super(path, **options.merge(headers: auth_headers.merge(options[:headers] || {})))
+  def delete(path, **options) = super(path, **options.merge(headers: auth_headers.merge(options[:headers] || {})))
+
   test "reads and replaces the canonical document" do
     post "/api/v1/projects", params: { project: { title: "Lenovo Tab M11" } }
     assert_response :created

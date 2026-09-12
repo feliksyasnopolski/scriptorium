@@ -13,6 +13,10 @@ Rails.application.routes.draw do
           put :document, action: :update_document
         end
       end
+      post "auth/signup", to: "auth#signup"
+      post "auth/login", to: "auth#login"
+      get "auth/current", to: "auth#current"
+      delete "auth/logout", to: "auth#logout"
     end
   end
 

@@ -258,6 +258,29 @@ with conventional authentication and synchronization.
 
 Opening it to other users should not change the basic premise.
 
+## Accounts and authentication
+
+An account is required to use Scriptorium; there is no anonymous editing mode
+or anonymous-project adoption flow. Accounts use an opaque username and
+password. Email addresses and phone numbers are neither required nor
+collected, and a username that happens to look like an email address remains
+an opaque username.
+
+Frontend clients authenticate with opaque bearer device-session tokens. The
+server stores only a cryptographic digest of each token, and logout revokes
+the current device session. Devise supplies password hashing; email-oriented
+modules and mailers are not enabled. Future recovery credentials will be
+TOTP/passkey-based rather than email-based.
+
+The bearer token and all locally cached project state are kept in IndexedDB.
+Project state is namespaced by the authenticated user's stable ID, so a
+different account cannot read, upload, or synchronize another account's local
+documents. Authentication state is not part of canonical project documents or
+JSON/Markdown exports.
+
+Project API queries are scoped through the authenticated user. User-authored
+project content remains text-first and is never interpreted as arbitrary HTML.
+
 A hosted version must still be:
 
 * focused on writing;
