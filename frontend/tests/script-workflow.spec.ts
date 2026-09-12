@@ -120,6 +120,54 @@ test('keeps a synchronized project editable across blocked API traffic and reloa
   }
 })
 
+test('times a subsection reading and keeps stopwatch state ephemeral', async ({ page, request }) => {
+  const title = `Stopwatch acceptance ${Date.now()}`
+  let projectId: string | undefined
+  try {
+    await page.goto('/')
+    const createResponse = page.waitForResponse((response) => response.url().endsWith('/api/v1/projects') && response.request().method() === 'POST')
+    await page.getByLabel('New project title').fill(title)
+    await page.getByRole('button', { name: '+ New project' }).click()
+    projectId = (await (await createResponse).json()).project.id
+    await page.getByRole('button', { name: '+ Add section' }).click()
+    const section = page.getByTestId('section-card')
+    await section.getByRole('button', { name: '+ Add subsection' }).click()
+
+    const subsection = page.getByTestId('subsection-card')
+    const stopwatch = subsection.getByTestId('stopwatch')
+    await expect(stopwatch.getByText('00:00')).toBeVisible()
+    await stopwatch.getByRole('button', { name: 'Start' }).click()
+    await expect(stopwatch.getByRole('button', { name: 'Stop' })).toBeVisible()
+    await page.waitForTimeout(1100)
+    await expect(stopwatch.getByText('00:01')).toBeVisible()
+
+    await stopwatch.getByRole('button', { name: 'Stop' }).click()
+    await expect(stopwatch.getByRole('button', { name: 'Use as estimate' })).toBeVisible()
+    const stoppedDisplay = await stopwatch.locator('.stopwatch-display').textContent()
+    await page.waitForTimeout(500)
+    await expect(stopwatch.locator('.stopwatch-display')).toHaveText(stoppedDisplay ?? '')
+
+    await stopwatch.getByRole('button', { name: 'Reset' }).click()
+    await expect(stopwatch.getByText('00:00')).toBeVisible()
+    await expect(stopwatch.getByRole('button', { name: 'Start' })).toBeVisible()
+
+    await stopwatch.getByRole('button', { name: 'Start' }).click()
+    await page.waitForTimeout(1100)
+    await stopwatch.getByRole('button', { name: 'Stop' }).click()
+    await stopwatch.getByRole('button', { name: 'Use as estimate' }).click()
+    await expect(subsection.getByLabel('Estimated seconds')).toHaveValue('1')
+
+    await page.waitForTimeout(1000)
+    await page.reload()
+    const reloadedStopwatch = page.getByTestId('subsection-card').getByTestId('stopwatch')
+    await expect(reloadedStopwatch.getByText('00:00')).toBeVisible()
+    await expect(reloadedStopwatch.getByRole('button', { name: 'Start' })).toBeVisible()
+    await expect(page.getByTestId('subsection-card').getByLabel('Estimated seconds')).toHaveValue('1')
+  } finally {
+    if (projectId) await request.delete(`/api/v1/projects/${projectId}`)
+  }
+})
+
 test('offers load-online and overwrite-online choices for a revision conflict', async ({ page, request }) => {
   const title = `Conflict acceptance ${Date.now()}`
   let projectId: string | undefined
