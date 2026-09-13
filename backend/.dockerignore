@@ -1,0 +1,13 @@
+.git
+.dockerignore
+.env*
+log/*
+tmp/*
+storage/*
+test
+spec
+node_modules
+coverage
+playwright-report
+test-results
+.DS_Store
