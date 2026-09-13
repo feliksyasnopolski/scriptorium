@@ -591,6 +591,8 @@ When implementation reveals that the requested route is becoming
 disproportionately complicated, stop and reconsider rather than accumulating
 hacks.
 
+When hosted CI is part of acceptance, use gh to inspect the resulting GitHub Actions run directly. On failure, read the failed logs before changing code. Do not ask the user to paste routine CI output when gh access is available.
+
 Do not dismiss a failing acceptance test as "unrelated" without evidence.
 
 A flaky test may expose a real race or state-machine bug.
