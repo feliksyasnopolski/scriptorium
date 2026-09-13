@@ -1,0 +1,48 @@
+service: scriptorium-backend
+
+image: feliksyasnopolski/scriptorium-backend
+
+servers:
+  web:
+    hosts:
+      - 193.123.38.157
+    options:
+      add-host: host.docker.internal:host-gateway
+
+ssh:
+  user: ubuntu
+
+registry:
+  server: ghcr.io
+  username: feliksyasnopolski
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: amd64
+  context: backend
+  dockerfile: Dockerfile
+
+proxy:
+  app_port: 3000
+  healthcheck:
+    path: /up
+    interval: 5
+    timeout: 5
+
+env:
+  clear:
+    RAILS_ENV: production
+    FORCE_SSL: "false"
+    SOLID_QUEUE_IN_PUMA: "true"
+    RAILS_MAX_THREADS: "3"
+    DATABASE_HOST: host.docker.internal
+  secret:
+    - RAILS_MASTER_KEY
+    - SCRIPTORIUM_DATABASE_PASSWORD
+    - TURNSTILE_SECRET_KEY
+
+aliases:
+  console: app exec --interactive --reuse "bin/rails console"
+  shell: app exec --interactive --reuse bash
+  migrate: app exec "bin/rails db:prepare"

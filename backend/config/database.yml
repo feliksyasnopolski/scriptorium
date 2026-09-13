@@ -89,6 +89,7 @@ production:
     <<: *default
     database: scriptorium_production
     username: scriptorium
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
     password: <%= ENV["SCRIPTORIUM_DATABASE_PASSWORD"] %>
   cache:
     <<: *primary_production

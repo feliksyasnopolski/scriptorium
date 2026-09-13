@@ -5,6 +5,9 @@ backend/tmp/*
 backend/storage/*
 backend/config/master.key
 backend/config/credentials/*.key
+
+# Kamal deployment secrets
+.kamal/secrets
 backend/.env
 backend/.env.*
 !backend/.env.example
