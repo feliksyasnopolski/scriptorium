@@ -49,7 +49,7 @@ AI may not author script content.
 
 An account is required. Identity is a username and password; Scriptorium does not require an email address or phone number. Authenticator-app TOTP credentials can optionally be configured for password recovery and are not required for ordinary login. Local project data is kept separate for each authenticated account on the device.
 
-Signup uses Cloudflare Turnstile abuse protection. Production backend deployments must provide `TURNSTILE_SECRET_KEY`; the production frontend uses the public sitekey configured as `VITE_TURNSTILE_SITE_KEY` (defaulting to Scriptorium's production sitekey). Development and test use Cloudflare's official always-pass test credentials by default, so local development does not need production credentials. Turnstile is not used for login or password recovery.
+Signup uses Cloudflare Turnstile abuse protection. Production backend deployments must provide `TURNSTILE_SECRET_KEY`; the production frontend uses the public sitekey configured as `VITE_TURNSTILE_SITE_KEY` (defaulting to Scriptorium's production sitekey). Development uses the real widget with Cloudflare's official always-pass test credentials by default, while CI uses an explicit test token with the same official test secret to avoid depending on hosted-widget execution. Local development does not need production credentials. Turnstile is not used for login or password recovery.
 
 ## Running locally
 

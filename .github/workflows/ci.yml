@@ -89,6 +89,7 @@ jobs:
           RAILS_ENV: development
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/scriptorium_development
           TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA
+          VITE_TURNSTILE_TEST_MODE: true
         run: npm run test:e2e
 
       - name: Check whitespace errors

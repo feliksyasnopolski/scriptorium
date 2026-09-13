@@ -4,6 +4,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 const emit = defineEmits<{ token: [value: string]; failure: [] }>()
 const container = ref<HTMLDivElement>()
 const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || (import.meta.env.PROD ? '0x4AAAAAAEylwc4XXTbWaGHd' : '1x00000000000000000000AA')
+const testMode = import.meta.env.VITE_TURNSTILE_TEST_MODE === 'true'
 let widgetId: string | undefined
 
 function renderWidget() {
@@ -24,6 +25,7 @@ function reset() {
 defineExpose({ reset })
 
 onMounted(() => {
+  if (testMode) return emit('token', 'test-token')
   if (window.turnstile) return renderWidget()
   const existing = document.querySelector('script[data-turnstile]')
   if (existing) return existing.addEventListener('load', renderWidget, { once: true })
