@@ -6,8 +6,6 @@ servers:
   web:
     hosts:
       - 193.123.38.157
-    options:
-      add-host: host.docker.internal:host-gateway
 
 ssh:
   user: ubuntu
@@ -36,7 +34,7 @@ env:
     FORCE_SSL: "false"
     SOLID_QUEUE_IN_PUMA: "true"
     RAILS_MAX_THREADS: "3"
-    DATABASE_HOST: host.docker.internal
+    DATABASE_HOST: 172.18.0.1
   secret:
     - RAILS_MASTER_KEY
     - SCRIPTORIUM_DATABASE_PASSWORD
