@@ -2,77 +2,176 @@
 
 # Scriptorium
 
-Scriptorium is a focused application for writing video scripts.
+Scriptorium is a focused, text-first application for writing video scripts.
 
 The repository is a monorepo:
 
 ```text
 scriptorium/
 ├── backend/    Rails application
-├── frontend/   Vue 3 application
+├── frontend/   Vue 3 + TypeScript application
 └── docs/
 ```
 
 Read `docs/PRODUCT.md` before making product or architectural decisions.
 
-## Core rule
+## Core engineering rule
 
 Do not build things merely because they are technically possible.
 
-Prefer the smallest implementation that solves the demonstrated problem.
+Prefer the smallest implementation that solves a demonstrated problem.
 
 No bullshit. No perdoling.
 
-When a task starts requiring increasingly complicated workarounds, repeated failed attempts, or infrastructure disproportionate to the feature, stop and reconsider the route instead of blindly continuing.
+"Perdoling" means prolonged technically competent-looking effort spent forcing,
+debugging, or polishing a path whose expected value no longer justifies the
+work.
 
-Existing mature components are preferred over bespoke infrastructure unless there is a concrete reason not to use them.
+When a task starts requiring:
 
-## Product boundaries
+- increasingly complicated workarounds;
+- repeated failed attempts;
+- infrastructure disproportionate to the feature;
+- custom machinery duplicating a mature existing component;
+- layers whose only purpose is to rescue earlier layers;
 
-Scriptorium is a writing tool.
+stop and reconsider the route.
+
+Existing mature components are preferred over bespoke infrastructure unless
+there is a concrete reason not to use them.
+
+"Can this be made to work?" is not enough.
+
+Ask whether this is still the simplest sensible route.
+
+## Product premise
+
+Scriptorium is an application for writers to write their own video scripts.
+
+Opening the application should lead quickly to writing, not to dashboards,
+analytics, project-management machinery, or content-generation tools.
+
+The basic writing experience should remain free.
+
+Scriptorium is deliberately narrow.
 
 It is not:
 
-* an AI writing assistant;
-* a video editor;
-* a publishing platform;
-* a creator dashboard;
-* a project-management system;
-* a collaboration suite;
-* an analytics product;
-* a social product.
+- a video editor;
+- a publishing platform;
+- a creator dashboard;
+- a project-management system;
+- a collaboration suite;
+- an analytics product;
+- a social product;
+- a general note-taking application;
+- an AI ghostwriter.
 
-Do not introduce functionality from those categories unless the user explicitly changes the product direction.
+Do not introduce functionality from those categories merely because another
+product has it or because it would be easy to implement.
 
-In particular, do not add AI generation, rewriting, completion, summarization, prompt fields, model integrations, or "magic" writing buttons.
+A new feature should solve a concrete recurring writing problem.
 
-Users are free to use external tools however they want. Scriptorium itself does not write for them.
+"Someone might want it", competitor parity, implementation ease, or agent
+convenience are not sufficient reasons to add a feature.
 
-## Architecture
+## Human authorship and future AI
 
-The repository contains two separate applications in one monorepo.
+Scriptorium does not author scripts for the user.
 
-### Backend
+Do not add:
+
+- script generation;
+- prompt-to-script flows;
+- continuation;
+- replacement paragraphs;
+- invented jokes, examples, arguments, facts, transitions, or narration;
+- "magic write";
+- silent AI rewrites.
+
+If users want generated prose, they can use external tools and paste or import
+the result.
+
+Future AI functionality may be acceptable when it remains subordinate to
+human authorship.
+
+Allowed future directions include:
+
+- spelling, grammar, and punctuation correction;
+- conservative stylistic cleanup;
+- repetition detection;
+- contradiction detection;
+- pacing and timing analysis;
+- structural analysis;
+- suggestions to reorder sections/subsections;
+- suggestions to split or merge existing material.
+
+The rule is:
+
+```text
+AI may analyze, classify, compare, reorder, and proofread.
+AI may not author script content.
+```
+
+Any future AI edit must preserve meaning, voice, and factual claims, and should
+be reviewable through explicit accept/reject or diff-based interaction.
+
+Do not implement AI functionality unless explicitly requested.
+
+## Text-first invariant
+
+Scriptorium is text-first.
+
+User-authored content is stored as plain text or, if richer formatting is added
+later, a constrained text representation such as Markdown.
+
+Do not store or render arbitrary user-supplied HTML.
+
+Do not use `v-html` for project/user content.
+
+If Markdown rendering is introduced later:
+
+- raw HTML must remain disabled;
+- rendered constructs must be constrained and sanitized;
+- canonical storage remains text/Markdown rather than editor-specific DOM or
+  rich-document structures.
+
+Do not turn Scriptorium into a WYSIWYG document system without an explicit
+product-direction change.
+
+## Backend architecture
 
 `backend/` is a regular Rails application using PostgreSQL.
 
 It is deliberately not generated with `--api`.
 
-The public application UI belongs to the Vue frontend, but keeping the normal Rails stack leaves room for simple Rails-rendered administrative/operator interfaces later.
+The public writing UI belongs to Vue, but retaining the normal Rails stack
+leaves room for small operator/admin interfaces if they are ever genuinely
+needed.
 
 Rails owns:
 
-* persistent server-side data;
-* HTTP API;
-* eventual authentication and users;
-* synchronization endpoints;
-* import/export support where server participation is useful;
-* uploaded assets such as project thumbnails;
-* administrative functionality if it is ever needed.
+- users and authentication;
+- device sessions;
+- recovery credentials;
+- persistent server-side project data;
+- authorization/ownership;
+- document synchronization endpoints;
+- revision/conflict semantics;
+- production-side account/security behavior.
 
-Do not add a second public frontend inside Rails.
+Do not build a second public application frontend inside Rails.
 
-### Frontend
+Prefer conventional Rails code.
+
+Do not introduce repositories, service layers, authorization frameworks, or
+other architectural layers unless the existing code has a concrete problem
+that they solve.
+
+Small focused service objects are fine where they materially clarify business
+logic.
+
+## Frontend architecture
 
 `frontend/` is a Vue 3 + TypeScript application built with Vite.
 
@@ -80,134 +179,349 @@ Use Pinia for shared application state.
 
 The frontend owns:
 
-* the script-writing UI;
-* project/section/subsection editing;
-* local application state;
-* offline persistence;
-* synchronization state;
-* eventual PWA/service-worker functionality.
+- authentication UI/state;
+- script-writing UI;
+- project/section/subsection editing;
+- local durable project storage;
+- synchronization state;
+- conflict UI;
+- import/export;
+- ephemeral writing tools such as the subsection stopwatch;
+- local appearance preferences;
+- eventual PWA behavior.
 
-Do not recreate Pinia using ad-hoc globals, event buses, or a collection of unrelated composables.
+Do not recreate Pinia using ad-hoc globals, generic event buses, or overlapping
+state layers.
 
 Do not introduce another frontend framework.
 
-## Data model
+### Frontend component rule
 
-The core hierarchy is:
+Split by visible product component first.
+
+Extract composables only for stateful behavior that crosses components or
+substantially clutters them.
+
+Do not create abstractions merely to reduce line count.
+
+Prefer files that a human can understand within a normal editor working set.
+
+Avoid:
+
+- giant root components;
+- dense one-line Vue templates;
+- very long inline handlers;
+- generic component factories;
+- design-system abstractions without a demonstrated repeated need.
+
+Optimize code for human scanning, not token density.
+
+Roughly 120–150 characters is a useful upper bound for normal human horizontal
+reading.
+
+## Core document model
+
+The writing hierarchy is:
 
 ```text
-VideoProject
+Project
 └── Section[]
     └── Subsection[]
 ```
 
-A `VideoProject` represents one video/script project.
+A Project represents one video/script project.
 
-A `Section` represents something roughly equivalent to a YouTube chapter.
+A Section is roughly equivalent to a YouTube chapter and primarily organizes
+subsections.
 
-A `Subsection` is the actual writing unit.
+A Subsection is the main writing unit.
 
-Sections are primarily organizational containers. Actual script content belongs in subsections.
+Subsection content includes:
 
-Expected subsection fields include:
+- optional title;
+- viewer/visual notes;
+- explanation/intent notes;
+- script text;
+- optional estimated duration.
 
-* optional title;
-* viewer/visual notes;
-* explanation/intent notes;
-* script text;
-* optional estimated duration;
-* position.
+Project content includes:
 
-Expected section fields include:
+- title;
+- optional target duration;
+- ordered sections.
 
-* title;
-* position.
+Do not duplicate derived values unnecessarily.
 
-Expected project fields include:
+For example, planned project duration is derived from subsection duration
+estimates.
 
-* title;
-* optional target duration;
-* optional thumbnail.
+## Ordering and identity
 
-Do not duplicate derived values unnecessarily. For example, planned project duration should normally be calculated from subsection duration estimates.
+Sections and subsections have stable public UUID identities.
 
-## Ordering
+Canonical document array order is authoritative.
 
-Sections and subsections are ordered.
+Do not add fractional ranking, complex ordering libraries, CRDT ordering, or
+other ranking machinery without a demonstrated need.
 
-Use a straightforward persisted position value unless real usage demonstrates that a more sophisticated ordering scheme is required.
+Subsection identity is project-wide, not scoped only to its current section.
 
-Do not add complex ordering libraries or fractional-ranking systems without a demonstrated need.
+Moving a subsection between sections preserves its identity.
 
-## Offline-first direction
+This invariant matters to whole-document reconciliation.
 
-Offline operation is a core product requirement, not an optional enhancement.
+## Canonical document API
 
-The eventual editing path is:
+Synchronization uses a canonical whole-document representation.
+
+The canonical JSON document is versioned with a schema version and includes the
+complete meaningful project hierarchy.
+
+Project revisions provide optimistic concurrency/conflict detection.
+
+The backend reconciles whole documents transactionally.
+
+Do not reintroduce nested CRUD synchronization for individual
+sections/subsections unless there is a concrete reason to change the established
+architecture.
+
+Do not expose database-internal IDs in the interchange format.
+
+## Local-first behavior
+
+Local-first behavior is a core requirement.
+
+After an authenticated account has been established on a device, normal writing
+must continue when the backend is unreachable.
+
+The editing path is conceptually:
 
 ```text
 user edit
-→ frontend state
-→ local durable storage
-→ synchronization queue
+→ Pinia/frontend state
+→ user-scoped IndexedDB canonical document
+→ synchronization
 → server
 ```
 
-When offline support is implemented:
+Requirements:
 
-* editing must not depend on the server being reachable;
-* local edits must survive browser reload/restart;
-* reconnecting should synchronize automatically;
-* connectivity loss must not interrupt the writing workflow;
-* the UI may indicate states such as `Synced`, `Saved locally`, or `Sync error`, but should not constantly demand attention.
+- local edits survive reload/restart;
+- connectivity loss must not interrupt writing;
+- reconnection should synchronize quietly;
+- failed remote synchronization must not destroy valid local edits;
+- stale asynchronous responses must not overwrite newer local state;
+- conflicts are explicit;
+- sync state should be quiet unless attention is needed.
 
-Use IndexedDB for durable browser-side project data unless there is a concrete reason to choose something else.
+Typical states include:
 
-Do not introduce CRDTs, operational transformation, WebSocket collaboration, or distributed conflict-resolution machinery merely in anticipation of possible future multi-device or multi-user editing.
+- Synced;
+- Saved locally;
+- Syncing;
+- Conflict;
+- Error.
 
-Start with simple version/conflict detection. Improve it only when real usage requires it.
+Do not add CRDTs, operational transformation, collaborative cursors, or generic
+distributed-conflict machinery merely in anticipation of future collaboration.
+
+Current conflict handling is intentionally explicit rather than automatic:
+
+```text
+load online copy
+or
+overwrite online with local copy
+```
+
+No automatic merge is required.
+
+## Authentication
+
+An account is required to use Scriptorium.
+
+There is no anonymous editing mode.
+
+This deliberately avoids anonymous-project adoption/migration ambiguity.
+
+Authentication uses:
+
+```text
+username + password
+```
+
+Username is the account identifier.
+
+Scriptorium deliberately does not require or collect:
+
+- email;
+- phone number;
+- real name.
+
+If a user chooses an email-looking string as their username, treat it only as
+an opaque username.
+
+Do not infer contact information from it.
+
+Do not add email-specific behavior.
+
+## Device sessions
+
+Frontend authentication uses opaque bearer device-session tokens.
+
+Do not replace them with JWTs merely because JWTs are common.
+
+Properties:
+
+- tokens are cryptographically random;
+- raw bearer tokens live client-side;
+- the server stores only token digests;
+- tokens are never placed in URLs;
+- raw tokens must not be logged;
+- sessions are individually revocable.
+
+Frontend bearer tokens are persisted in IndexedDB.
+
+Authenticated API requests send the token centrally through the API client.
+
+Do not manually duplicate bearer-header logic throughout components.
+
+## User isolation
+
+Every project belongs to exactly one User.
+
+All backend project queries must be scoped through the authenticated user.
+
+A user must never be able to enumerate, fetch, modify, or delete another user's
+projects.
+
+Local IndexedDB project data is also scoped to the authenticated user's stable
+identity.
+
+Async account-scoped frontend operations must capture the expected user identity
+when they start and must not commit state after authentication has switched to
+another account.
+
+A stale request from User A must never populate User B's frontend state.
+
+This is a security invariant, not merely UI behavior.
+
+## Recovery
+
+TOTP authenticator credentials are optional recovery credentials.
+
+TOTP is not mandatory login 2FA.
+
+Normal login remains:
+
+```text
+username + password
+```
+
+A configured TOTP credential may be used to reset a forgotten password.
+
+Users may configure multiple authenticator credentials.
+
+TOTP secrets must be encrypted at rest.
+
+Successful password recovery revokes previous device sessions and creates a new
+session for the recovered client.
+
+There is deliberately no email or phone recovery fallback.
+
+If a user has no recovery credential and loses the password, the account may be
+unrecoverable.
+
+Passkeys may be added later as another recovery/authentication credential type.
+
+Do not add support-mediated identity recovery or security questions.
+
+## Bot/abuse protection
+
+General bot protection is not yet a reason to complicate ordinary login.
+
+The intended near-term signup protection is a lightweight mechanism such as
+Cloudflare Turnstile plus server-side rate limiting.
+
+Do not require TOTP pairing merely as bot protection.
+
+Do not add CAPTCHA/challenges to ordinary login unless observed abuse justifies
+it.
+
+Solve observed abuse rather than hypothetical sophisticated attackers.
 
 ## Data ownership and portability
 
-The user's data belongs to the user.
+User data belongs to the user.
 
-Structured export is a core feature.
+Structured export is a core product feature.
 
-JSON is the canonical interchange format and must be versioned with a schema version.
+JSON is the canonical interchange format.
 
-A project export should preserve the complete meaningful hierarchy and content without relying on internal database IDs.
+It must preserve the complete meaningful project hierarchy and stable public
+identities without exposing database internals.
 
-Human-readable Markdown export is also desirable.
+Markdown export provides a human-readable representation.
 
-JSON import should eventually support lossless semantic round trips.
+JSON import supports semantic round trips.
 
-Do not create a proprietary project format when ordinary documented JSON is sufficient.
-
-## Authentication and multiple users
-
-The first version does not need users or authentication.
-
-The data model should remain easy to extend later with:
+Two import modes exist:
 
 ```text
-User
-└── VideoProject[]
+Projects screen import
+→ create a new project
+
+Project editor import
+→ replace the current project's content
+→ preserve current project identity/revision/sync ownership
 ```
 
-Do not build speculative multi-tenancy infrastructure now.
+Do not create a proprietary opaque project format when documented JSON is
+sufficient.
 
-If the application is eventually opened to multiple users, conventional Rails authentication plus external identity providers such as Google or Apple is an acceptable direction.
+## Stopwatch
 
-Do not distort current implementation merely to prepare for hypothetical scale.
+The subsection stopwatch is deliberately ephemeral.
+
+Its purpose is to estimate actual spoken duration while reading a subsection.
+
+It:
+
+- uses whole-second display;
+- supports start/stop/resume/reset;
+- can explicitly copy measured duration into `estimated_seconds`;
+- does not persist stopwatch state;
+- does not synchronize stopwatch state.
+
+Do not expand it into rehearsal history, analytics, lap timing, or recording
+machinery without demonstrated need.
+
+## Appearance
+
+Appearance supports exactly:
+
+```text
+System
+Light
+Dark
+```
+
+Default is System.
+
+The preference is local-only.
+
+Do not synchronize it through the backend.
+
+Do not expand this into custom palettes, theme marketplaces, per-project themes,
+or a design-system project.
 
 ## UI principles
 
-The application should feel like a dedicated writing tool.
+The application should feel like a dedicated writing surface.
 
 The normal flow is:
 
 ```text
-open application
+authenticate
 → choose/create project
 → write
 ```
@@ -218,52 +532,51 @@ Avoid unnecessary modal workflows.
 
 Avoid decorative complexity that competes with writing.
 
-The project screen should expose the structure of the script clearly:
-
-```text
-Project
-  Section
-    Subsection
-    Subsection
-  Section
-    Subsection
-```
-
 Autosaving should be quiet and reliable.
 
-Do not require explicit Save buttons for routine text editing unless there is a technical reason.
+Do not require explicit Save buttons for normal editing.
+
+Account/security controls should remain subordinate to writing.
 
 ## Scope discipline
 
-Before adding a dependency, abstraction, service, background job, framework, or subsystem, ask what current requirement needs it.
+Before adding a dependency, abstraction, service, background job, framework, or
+subsystem, ask what current requirement needs it.
 
 Do not pre-build:
 
-* collaboration;
-* comments;
-* permissions beyond what currently exists;
-* version-history UI;
-* analytics;
-* tags;
-* folders;
-* publishing workflows;
-* video hosting;
-* audio handling;
-* timelines;
-* notifications;
-* embedded AI;
-* elaborate admin systems;
-* generic plugin systems.
+- collaboration;
+- comments;
+- generic permissions/RBAC;
+- version-history UI;
+- analytics;
+- tags/folders;
+- publishing workflows;
+- video hosting;
+- audio timelines;
+- notification systems;
+- general plugin systems;
+- generic AI infrastructure;
+- elaborate admin systems.
 
 If actual use demonstrates a need, add the smallest feature that solves it.
 
+Features such as the subsection stopwatch and dark mode are examples of the
+preferred process:
+
+```text
+actual use
+→ concrete friction
+→ small bounded feature
+```
+
 ## Implementation behavior
 
-Inspect the existing code before changing architecture.
+Inspect existing code before changing architecture.
 
-Preserve established project conventions once they exist.
+Preserve established conventions.
 
-Prefer boring Rails and boring Vue code.
+Prefer boring Rails and boring Vue.
 
 Use framework-native features before adding dependencies.
 
@@ -271,32 +584,66 @@ Keep backend/frontend responsibilities clear.
 
 Do not silently broaden the task.
 
-Do not replace a small requested feature with a generic abstraction unless the generic abstraction is materially simpler.
+Do not replace a small requested feature with a generic abstraction unless the
+generic abstraction is materially simpler.
 
-When implementation reveals that the requested route is becoming disproportionately complicated, report the issue and reconsider the approach rather than accumulating hacks.
+When implementation reveals that the requested route is becoming
+disproportionately complicated, stop and reconsider rather than accumulating
+hacks.
+
+Do not dismiss a failing acceptance test as "unrelated" without evidence.
+
+A flaky test may expose a real race or state-machine bug.
+
+Fix the underlying behavior when that is the case rather than adding arbitrary
+test waits.
 
 ## Validation
 
 Do not report implementation complete based only on static inspection.
 
-Run the relevant application, tests, builds, migrations, or concrete acceptance path whenever the environment permits it.
+Run the relevant:
 
-For user-facing workflows, verify the workflow itself.
+- Rails tests;
+- frontend build/typecheck;
+- Playwright acceptance suite;
+- migrations;
+- concrete browser/runtime workflow;
+- `git diff --check`.
 
-For offline functionality, acceptance must include actual offline operation rather than only mocked network state or unit tests.
+For user-facing behavior, verify the workflow itself.
 
-## Current development priority
+For local-first/offline behavior, acceptance must include actual browser
+offline/network-failure behavior where relevant.
 
-Build Scriptorium in small usable increments.
+The full acceptance suite should be green before feature work is considered
+complete unless a known failure has been explicitly investigated and accepted.
 
-The current priority order is:
+Generated test/build artifacts should not be committed.
 
-1. repository/application bootstrap;
-2. core project/section/subsection writing flow;
-3. durable offline-first frontend storage and synchronization;
-4. JSON/Markdown interchange;
-5. improvements driven by actual use;
-6. multi-user functionality only if there is a real reason to publish the service.
+The working tree should be clean after a completed committed task.
 
-Do not skip ahead because a later feature seems interesting.
+## Current development phase
 
+The core product feature set is now sufficient for an initial public release.
+
+Pause speculative feature development.
+
+Current priorities are:
+
+1. keep the test suite green;
+2. add CI;
+3. add lightweight signup abuse protection;
+4. prepare production backend deployment;
+5. use Kamal for backend deployment;
+6. automate frontend deployment to Cloudflare Pages;
+7. use version tags as production release boundaries;
+8. configure backups and basic production observability;
+9. smoke-test the real production signup/login/TOTP/sync/offline flows;
+10. resume product feature work only from actual usage.
+
+Inactivity cleanup and other operational refinements may wait until real usage
+makes them relevant.
+
+Do not skip back into feature brainstorming merely because implementation is
+cheap.
