@@ -2,7 +2,7 @@
 
 Scriptorium is a focused, text-first application for writing video scripts.
 
-It gives long-form video writing enough structure to stay manageable without turning the work into project management, publishing, analytics, collaboration, or a creator dashboard. Open a project, organize the argument, and write.
+It gives long-form video writing enough structure to stay manageable without turning the work into project management, publishing, analytics, collaboration, or a creator dashboard. Open a project, shape the script, and write.
 
 **Scriptorium helps you write. It does not write instead of you.**
 
@@ -102,6 +102,14 @@ The Playwright configuration starts both development servers and runs the real w
 
 ## Project status
 
-Scriptorium is under active development. The core product is sufficient for an initial public release; current work is focused on testing, deployment, backups, observability, and production smoke testing rather than speculative feature expansion.
+Scriptorium is under active development. The core writing experience is implemented; current work is focused on production readiness and reliability rather than speculative feature expansion.
 
 For the product's scope and design constraints, see [`docs/PRODUCT.md`](docs/PRODUCT.md). For the account and recovery model, see [`docs/SECURITY.md`](docs/SECURITY.md).
+
+## Contributions
+
+Bug reports and feature discussions are welcome. Pull requests are not accepted.
+
+## License
+
+Scriptorium is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE).
