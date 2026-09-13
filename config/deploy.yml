@@ -20,8 +20,8 @@ registry:
 
 builder:
   arch: arm64
-  context: backend
-  dockerfile: Dockerfile
+  context: .
+  dockerfile: backend/Dockerfile
 
 proxy:
   app_port: 3000
