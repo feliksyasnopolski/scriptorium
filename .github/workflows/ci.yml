@@ -39,18 +39,13 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Get Playwright version
-        id: playwright-version
-        working-directory: frontend
-        run: echo "version=$(node -p \"require('./node_modules/@playwright/test/package.json').version\")" >> "$GITHUB_OUTPUT"
-
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-${{ hashFiles('frontend/package-lock.json') }}
-
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          
       - name: Install Playwright system dependencies
         working-directory: frontend
         run: npx playwright install-deps chromium
