@@ -322,28 +322,36 @@ test('tree drag shows source and exact insertion markers', async ({ page, reques
     await page.getByTestId('section-card').nth(1).getByRole('button', { name: '+ Add subsection' }).click()
     await page.getByTestId('subsection-card').nth(2).getByPlaceholder('Subsection title (optional)').fill('Destination subsection')
 
-    await page.evaluate(() => {
-      const source = [...document.querySelectorAll('.tree-row')].find((row) => row.textContent?.includes('Second subsection')) as HTMLElement
-      const destination = [...document.querySelectorAll('.tree-row')].find((row) => row.textContent?.includes('Destination subsection')) as HTMLElement
+    const subsectionSource = page.getByRole('button', { name: 'Second subsection', exact: true }).locator('..')
+    const subsectionDestination = page.getByRole('button', { name: 'Destination subsection', exact: true }).locator('..')
+    await expect(subsectionSource).toBeVisible()
+    await expect(subsectionDestination).toBeVisible()
+    await page.evaluate(({ sourceId, destinationId }) => {
+      const source = document.querySelector(`[data-id="${sourceId}"]`) as HTMLElement
+      const destination = document.querySelector(`[data-id="${destinationId}"]`) as HTMLElement
       const dataTransfer = new DataTransfer()
       dataTransfer.setData('application/x-scriptorium-item', JSON.stringify({ kind: 'subsection', id: source.dataset.id, sectionId: source.dataset.sectionId }))
       source.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }))
       destination.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientY: destination.getBoundingClientRect().top + 1, dataTransfer }))
-    })
+    }, { sourceId: await subsectionSource.getAttribute('data-id'), destinationId: await subsectionDestination.getAttribute('data-id') })
     await expect(page.locator('.tree-row.drag-source')).toContainText('Second subsection')
     await expect(page.getByTestId('subsection-insertion-marker')).toHaveCount(1)
     await page.locator('.tree-row').filter({ hasText: 'Destination subsection' }).dispatchEvent('drop')
     await expect(page.locator('.tree-row').filter({ hasText: 'Second subsection' }).locator('xpath=..')).toContainText('Second subsection')
     await expect(page.getByTestId('section-card').nth(1).getByTestId('subsection-card').nth(0).getByPlaceholder('Subsection title (optional)')).toHaveValue('Second subsection')
 
-    await page.evaluate(() => {
-      const source = [...document.querySelectorAll('.tree-row')].find((row) => row.textContent?.includes('First section')) as HTMLElement
-      const destination = [...document.querySelectorAll('.tree-row')].find((row) => row.textContent?.includes('Second section')) as HTMLElement
+    const sectionSource = page.getByRole('button', { name: 'First section', exact: true }).locator('..')
+    const sectionDestination = page.getByRole('button', { name: 'Second section', exact: true }).locator('..')
+    await expect(sectionSource).toBeVisible()
+    await expect(sectionDestination).toBeVisible()
+    await page.evaluate(({ sourceId, destinationId }) => {
+      const source = document.querySelector(`[data-id="${sourceId}"]`) as HTMLElement
+      const destination = document.querySelector(`[data-id="${destinationId}"]`) as HTMLElement
       const dataTransfer = new DataTransfer()
       dataTransfer.setData('application/x-scriptorium-item', JSON.stringify({ kind: 'section', id: source.dataset.id }))
       source.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }))
       destination.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientY: destination.getBoundingClientRect().top + 1, dataTransfer }))
-    })
+    }, { sourceId: await sectionSource.getAttribute('data-id'), destinationId: await sectionDestination.getAttribute('data-id') })
     await expect(page.getByTestId('section-insertion-marker')).toHaveCount(1)
   } finally {
     if (projectId) await request.delete(`/api/v1/projects/${projectId}`)
@@ -364,7 +372,9 @@ test('imports canonical JSON globally and replaces an existing project in place'
     await page.getByTestId('section-card').getByLabel('Section title').fill('Imported section')
     await page.getByTestId('section-card').getByRole('button', { name: '+ Add subsection' }).click()
     await page.getByTestId('subsection-card').getByPlaceholder('Subsection title (optional)').fill('Imported subsection')
+    const scriptSave = page.waitForResponse((response) => response.url().includes('/document') && response.request().method() === 'PUT' && response.status() === 200)
     await page.getByTestId('subsection-card').getByRole('textbox', { name: 'Script' }).fill('Portable script content.')
+    await scriptSave
     const finalSave = page.waitForResponse((response) => response.url().includes('/document') && response.request().method() === 'PUT' && response.status() === 200)
     await page.getByLabel('Target duration').fill('600')
     await finalSave
@@ -381,8 +391,9 @@ test('imports canonical JSON globally and replaces an existing project in place'
     await expect(page.getByRole('textbox', { name: 'Script' })).toHaveValue('Portable script content.')
     await expect(page.getByLabel('Target duration')).toHaveValue('600')
 
+    const replacementSave = page.waitForResponse((response) => response.url().includes(`/projects/${importedId}/document`) && response.request().method() === 'PUT' && response.status() === 200)
     await page.getByLabel('Project title').fill('Changed before replacement')
-    await page.waitForTimeout(700)
+    await replacementSave
     page.once('dialog', (dialog) => dialog.accept())
     await page.getByRole('button', { name: 'Import JSON' }).click()
     await input.setInputFiles({ name: 'project.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)) })
