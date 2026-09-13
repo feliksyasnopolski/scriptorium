@@ -35,6 +35,8 @@ reports/
 
 # Operating systems
 .DS_Store
+**/.DS_Store
+**/.DS_Store/**
 .AppleDouble
 .LSOverride
 Icon
