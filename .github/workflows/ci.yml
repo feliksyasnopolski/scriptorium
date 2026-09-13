@@ -25,8 +25,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: backend/.ruby-version
-          bundler: 4.0.3
+          ruby-version: .ruby-version
           bundler-cache: true
           working-directory: backend
 
