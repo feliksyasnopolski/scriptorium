@@ -394,13 +394,12 @@ test('imports canonical JSON globally and replaces an existing project in place'
     const replacementSave = page.waitForResponse((response) => response.url().includes(`/projects/${importedId}/document`) && response.request().method() === 'PUT' && response.status() === 200)
     await page.getByLabel('Project title').fill('Changed before replacement')
     await replacementSave
-    page.once('dialog', (dialog) => dialog.accept())
+    page.on('dialog', (dialog) => dialog.accept())
     await page.getByRole('button', { name: 'Import JSON' }).click()
     await input.setInputFiles({ name: 'project.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)) })
     await expect(page.getByLabel('Project title')).toHaveValue(title)
     expect(new URL(page.url()).searchParams.get('project')).toBe(importedId)
 
-    page.once('dialog', (dialog) => dialog.accept())
     await page.getByRole('button', { name: 'Import JSON' }).click()
     await input.setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{"schema_version": 99}') })
     await expect(page.locator('.error-message')).toContainText('Unsupported schema version')
