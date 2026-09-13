@@ -65,11 +65,16 @@ export const useAuthStore = defineStore('auth', () => {
     try { await establish(await apiRequest<AuthResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }, false)) }
     catch (reason) { error.value = reason instanceof Error ? reason.message : 'Unable to log in'; throw reason }
   }
+  async function recover(username: string, code: string, password: string, passwordConfirmation: string) {
+    error.value = ''
+    try { await establish(await apiRequest<AuthResponse>('/auth/recover', { method: 'POST', body: JSON.stringify({ username, code, password, password_confirmation: passwordConfirmation }) }, false)) }
+    catch (reason) { error.value = reason instanceof Error ? reason.message : 'Recovery unavailable'; throw reason }
+  }
   async function logout() {
     await apiRequest('/auth/logout', { method: 'DELETE' }).catch(() => undefined)
     activeToken = ''
     user.value = null
     await writeStored(undefined).catch(() => undefined)
   }
-  return { user, loading, error, initialize, signup, login, logout }
+  return { user, loading, error, initialize, signup, login, recover, logout }
 })

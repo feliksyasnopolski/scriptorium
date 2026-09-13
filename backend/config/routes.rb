@@ -17,6 +17,11 @@ Rails.application.routes.draw do
       post "auth/login", to: "auth#login"
       get "auth/current", to: "auth#current"
       delete "auth/logout", to: "auth#logout"
+      get "account/totp", to: "totp#index"
+      post "account/totp", to: "totp#create"
+      post "account/totp/:id/confirm", to: "totp#confirm"
+      delete "account/totp/:id", to: "totp#destroy"
+      post "auth/recover", to: "auth#recover"
     end
   end
 

@@ -7,11 +7,13 @@ import TopBar from './components/TopBar.vue'
 import ProjectsView from './components/ProjectsView.vue'
 import ProjectEditor from './components/ProjectEditor.vue'
 import AuthScreen from './components/AuthScreen.vue'
+import AccountSettings from './components/AccountSettings.vue'
 
 const auth = useAuthStore()
 const store = useProjectsStore()
 const routeProjectId = ref<string | null>(null)
 const newTitle = ref('')
+const accountOpen = ref(false)
 const currentProject = computed(() => routeProjectId.value ? store.projects.find((project) => project.id === routeProjectId.value) ?? null : null)
 const globalTransfer = useProjectTransfer(currentProject, openProject)
 
@@ -26,11 +28,11 @@ async function createProject(title: string) {
   const project = await store.createProject(title || 'Untitled project')
   await openProject(project.id, false)
 }
-async function logout() { await auth.logout() }
+async function logout() { accountOpen.value = false; await auth.logout() }
 async function openProject(id: string, load = true) {
   routeProjectId.value = id
   history.replaceState({}, '', `?project=${id}`)
-  if (load) await store.openProject(id)
+  await store.openProject(id, load)
 }
 function goHome() {
   routeProjectId.value = null
@@ -41,9 +43,10 @@ function goHome() {
 <template>
   <AuthScreen v-if="!auth.loading && !auth.user" />
   <main v-else-if="auth.user" class="app-shell">
-    <TopBar :project-open="Boolean(currentProject)" :save-state="store.saveStateLabel" @home="goHome" @logout="logout" />
+    <TopBar :project-open="Boolean(currentProject)" :save-state="store.saveStateLabel" @home="goHome" @logout="logout" @account="accountOpen = true" />
+    <AccountSettings v-if="accountOpen" @back="accountOpen = false" />
     <ProjectsView
-      v-if="!currentProject"
+      v-else-if="!currentProject"
       :new-title="newTitle"
       @update:new-title="newTitle = $event"
       :projects="store.projects"
@@ -54,7 +57,7 @@ function goHome() {
       @delete="store.deleteProject"
       @import="globalTransfer.chooseImport('global')"
     />
-    <ProjectEditor v-else :project="currentProject" :import-error="globalTransfer.importError.value" @back="goHome" @import="globalTransfer.chooseImport('replace')" />
+    <ProjectEditor v-else-if="!accountOpen" :project="currentProject" :import-error="globalTransfer.importError.value" @back="goHome" @import="globalTransfer.chooseImport('replace')" />
     <input :ref="globalTransfer.setImportInput" class="hidden-file-input" type="file" accept="application/json,.json" @change="globalTransfer.importJson" />
   </main>
 </template>

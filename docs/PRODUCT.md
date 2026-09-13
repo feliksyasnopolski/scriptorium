@@ -258,6 +258,16 @@ with conventional authentication and synchronization.
 
 Opening it to other users should not change the basic premise.
 
+## Account recovery
+
+Accounts use a username and password. Scriptorium does not collect email
+addresses or phone numbers. Authenticator apps are optional recovery
+credentials, not mandatory login two-factor authentication. A confirmed TOTP
+credential can reset the password; users may configure multiple authenticators.
+Recovery revokes all previous device sessions and signs the recovered client in.
+If no recovery credential exists and the password is lost, the account is
+unrecoverable by design. Passkeys may be added later as another credential type.
+
 ## Accounts and authentication
 
 An account is required to use Scriptorium; there is no anonymous editing mode

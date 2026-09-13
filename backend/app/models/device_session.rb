@@ -23,6 +23,10 @@ class DeviceSession < ApplicationRecord
     update!(revoked_at: Time.current)
   end
 
+  def self.revoke_all_for!(user)
+    where(user: user, revoked_at: nil).update_all(revoked_at: Time.current, updated_at: Time.current)
+  end
+
   def self.digest(token)
     Digest::SHA256.hexdigest(token)
   end

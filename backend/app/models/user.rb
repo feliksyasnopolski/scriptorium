@@ -4,6 +4,7 @@ class User < ApplicationRecord
   has_many :video_projects, dependent: :destroy, inverse_of: :user
   has_many :projects, class_name: "VideoProject", dependent: :destroy, inverse_of: :user
   has_many :device_sessions, dependent: :destroy, inverse_of: :user
+  has_many :totp_credentials, dependent: :destroy, inverse_of: :user
 
   attr_accessor :password_confirmation
 

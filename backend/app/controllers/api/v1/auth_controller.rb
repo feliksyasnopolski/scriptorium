@@ -1,7 +1,7 @@
 module Api
   module V1
     class AuthController < BaseController
-      skip_before_action :authenticate_user!, only: %i[signup login]
+      skip_before_action :authenticate_user!, only: %i[signup login recover]
 
       def signup
         payload = body_params
@@ -29,6 +29,29 @@ module Api
       def logout
         current_device_session&.revoke!
         head :no_content
+      end
+
+      def recover
+        username = body_params["username"].to_s
+        unless RecoveryRateLimiter.allowed?(request.remote_ip, username)
+          return render json: { error: "Recovery is temporarily unavailable" }, status: :too_many_requests
+        end
+
+        user = User.find_for_database_authentication(username: username)
+        unless body_params["password"].to_s == body_params["password_confirmation"].to_s
+          return render json: { error: "Recovery code is invalid or recovery is unavailable" }, status: :unauthorized
+        end
+        credential = user ? user.totp_credentials.where.not(confirmed_at: nil).detect { |item| item.verify(body_params["code"]) } : nil
+        unless credential
+          return render json: { error: "Recovery code is invalid or recovery is unavailable" }, status: :unauthorized
+        end
+
+        user.password = body_params["password"].to_s
+        user.password_confirmation = body_params["password_confirmation"].to_s
+        return render_errors(user) unless user.save
+
+        DeviceSession.revoke_all_for!(user)
+        render_session(user, :created)
       end
 
       private
