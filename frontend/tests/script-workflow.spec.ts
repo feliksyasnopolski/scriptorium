@@ -365,8 +365,9 @@ test('imports canonical JSON globally and replaces an existing project in place'
     await page.getByTestId('section-card').getByRole('button', { name: '+ Add subsection' }).click()
     await page.getByTestId('subsection-card').getByPlaceholder('Subsection title (optional)').fill('Imported subsection')
     await page.getByTestId('subsection-card').getByRole('textbox', { name: 'Script' }).fill('Portable script content.')
+    const finalSave = page.waitForResponse((response) => response.url().includes('/document') && response.request().method() === 'PUT' && response.status() === 200)
     await page.getByLabel('Target duration').fill('600')
-    await expect(page.getByText('Synced')).toBeVisible()
+    await finalSave
 
     const exported = await (await request.get(`/api/v1/projects/${originalId}/document`)).json()
     const input = page.locator('input[type="file"]')
