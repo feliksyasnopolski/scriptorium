@@ -8,6 +8,7 @@ import ProjectsView from './components/ProjectsView.vue'
 import ProjectEditor from './components/ProjectEditor.vue'
 import AuthScreen from './components/AuthScreen.vue'
 import AccountSettings from './components/AccountSettings.vue'
+import { useTheme } from './composables/useTheme'
 
 const auth = useAuthStore()
 const store = useProjectsStore()
@@ -16,6 +17,7 @@ const newTitle = ref('')
 const accountOpen = ref(false)
 const currentProject = computed(() => routeProjectId.value ? store.projects.find((project) => project.id === routeProjectId.value) ?? null : null)
 const globalTransfer = useProjectTransfer(currentProject, openProject)
+useTheme()
 
 onMounted(async () => {
   await auth.initialize()

@@ -1,5 +1,6 @@
-:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #25231f; background: #f7f5f0; font-synthesis: none; text-rendering: optimizeLegibility; }
-* { box-sizing: border-box; } body { margin: 0; min-width: 320px; } button, input, textarea { font: inherit; } button { cursor: pointer; }
+:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: var(--text-primary); background: var(--page-background); color-scheme: light; font-synthesis: none; text-rendering: optimizeLegibility; --page-background: #f7f5f0; --panel-background: #fbfaf7; --elevated-background: #fffefa; --subsection-background: #fffefa; --section-background: #eeebe4; --text-primary: #25231f; --text-secondary: #514a41; --text-muted: #777269; --border: #dedbd3; --border-strong: #cec7bc; --input-border: #d7d2c9; --input-background: #fffefa; --button-background: #25231f; --button-text: #ffffff; --accent: #8b6d4e; --accent-strong: #c17835; --danger: #986050; --error: #9b4d3d; --focus: #c18a51; --active-tree: #eee3d5; --code-background: #f2efe8; }
+:root[data-theme="dark"] { color-scheme: dark; --page-background: #171817; --panel-background: #20211f; --elevated-background: #272825; --subsection-background: #272825; --section-background: #22231f; --text-primary: #eeeae2; --text-secondary: #d1cbc1; --text-muted: #aaa49a; --border: #3a3b36; --border-strong: #515149; --input-border: #4b4c45; --input-background: #20211f; --button-background: #e8e2d8; --button-text: #1d1e1b; --accent: #d4ab7e; --accent-strong: #e0a15d; --danger: #e09a86; --error: #f0a194; --focus: #e0a15d; --active-tree: #3a3025; --code-background: #30312c; }
+* { box-sizing: border-box; } body { margin: 0; min-width: 320px; background: var(--page-background); color: var(--text-primary); } button, input, textarea, select { font: inherit; } button { cursor: pointer; }
 .app-shell { min-height: 100vh; } .topbar { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 5vw; border-bottom: 1px solid #dedbd3; background: #fbfaf7; }
 .hidden-file-input { display: none; }
 .wordmark { border: 0; background: none; padding: 0; font-weight: 700; font-size: 1.15rem; color: #25231f; } .save-state { color: #777269; font-size: .85rem; }
@@ -37,3 +38,25 @@ input, textarea { border: 1px solid #d7d2c9; border-radius: 5px; background: #ff
 .auth-note { color: #777269; font-size: .9rem; line-height: 1.45; }
 .auth-switch { margin-top: 18px; border: 0; background: none; color: #776852; padding: 0; }
 .form-error { margin: 0; color: #a33d32; font-size: .9rem; }
+
+/* The dark palette keeps the existing hierarchy and spacing intact. */
+:root[data-theme="dark"] .topbar, :root[data-theme="dark"] .script-tree { background: var(--panel-background); border-color: var(--border); }
+:root[data-theme="dark"] input, :root[data-theme="dark"] textarea, :root[data-theme="dark"] select { background: var(--input-background); color: var(--text-primary); border-color: var(--input-border); }
+:root[data-theme="dark"] .primary-button, :root[data-theme="dark"] .add-section { background: var(--button-background); color: var(--button-text); }
+:root[data-theme="dark"] .project-card, :root[data-theme="dark"] .empty-card, :root[data-theme="dark"] .subsection-card, :root[data-theme="dark"] .security-card, :root[data-theme="dark"] .auth-card { background: var(--elevated-background); border-color: var(--border); }
+:root[data-theme="dark"] .section-card { background: var(--section-background); border-color: var(--border); }
+:root[data-theme="dark"] .controls button, :root[data-theme="dark"] .export-actions button, :root[data-theme="dark"] .stopwatch-controls button { background: var(--elevated-background); color: var(--text-secondary); border-color: var(--border-strong); }
+:root[data-theme="dark"] .wordmark { color: var(--text-primary); }
+:root[data-theme="dark"] .save-state, :root[data-theme="dark"] .timing-row, :root[data-theme="dark"] .timing-block, :root[data-theme="dark"] label, :root[data-theme="dark"] .estimate-label, :root[data-theme="dark"] .stopwatch, :root[data-theme="dark"] .tree-heading, :root[data-theme="dark"] .sidebar-close { color: var(--text-muted); }
+:root[data-theme="dark"] .tree-label, :root[data-theme="dark"] .stopwatch-display { color: var(--text-secondary); }
+:root[data-theme="dark"] .tree-row.active { background: var(--active-tree); }
+:root[data-theme="dark"] .tree-insertion-marker { background: var(--accent-strong); box-shadow: 0 0 0 1px var(--panel-background), 0 0 0 2px var(--accent-strong); }
+:root[data-theme="dark"] .auth-shell { background: var(--page-background); }
+:root[data-theme="dark"] .auth-card input { background: var(--input-background); color: var(--text-primary); border-color: var(--input-border); }
+:root[data-theme="dark"] .conflict-dialog { background: var(--elevated-background); color: var(--text-primary); }
+:root[data-theme="dark"] .setup-details code { background: var(--code-background); color: var(--text-primary); }
+:root[data-theme="dark"] .theme-selector { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: .78rem; }
+:root[data-theme="dark"] .theme-selector select { width: auto; padding: 5px 7px; }
+.theme-selector { display: inline-flex; align-items: center; gap: 6px; color: #777269; font-size: .78rem; }
+.theme-selector select { width: auto; padding: 5px 7px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } }
