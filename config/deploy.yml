@@ -19,7 +19,7 @@ registry:
     - KAMAL_REGISTRY_PASSWORD
 
 builder:
-  arch: amd64
+  arch: arm64
   context: backend
   dockerfile: Dockerfile
 
