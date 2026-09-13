@@ -5,6 +5,10 @@ module Api
 
       def signup
         payload = body_params
+        unless TurnstileVerifier.verify(payload["turnstile_token"], request.remote_ip)
+          return render json: { error: "Signup verification failed. Please try again." }, status: :unprocessable_entity
+        end
+
         password = payload["password"].to_s
         user = User.new(username: payload["username"], password: password)
         user.password_confirmation = payload["password_confirmation"] if payload.key?("password_confirmation")

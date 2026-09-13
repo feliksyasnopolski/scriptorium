@@ -55,9 +55,9 @@ export const useAuthStore = defineStore('auth', () => {
       }
     } finally { loading.value = false }
   }
-  async function signup(username: string, password: string, passwordConfirmation: string) {
+  async function signup(username: string, password: string, passwordConfirmation: string, turnstileToken: string) {
     error.value = ''
-    try { await establish(await apiRequest<AuthResponse>('/auth/signup', { method: 'POST', body: JSON.stringify({ username, password, password_confirmation: passwordConfirmation }) }, false)) }
+    try { await establish(await apiRequest<AuthResponse>('/auth/signup', { method: 'POST', body: JSON.stringify({ username, password, password_confirmation: passwordConfirmation, turnstile_token: turnstileToken }) }, false)) }
     catch (reason) { error.value = reason instanceof Error ? reason.message : 'Unable to create account'; throw reason }
   }
   async function login(username: string, password: string) {

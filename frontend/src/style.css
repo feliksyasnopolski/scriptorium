@@ -37,6 +37,7 @@ input, textarea { border: 1px solid #d7d2c9; border-radius: 5px; background: #ff
 .auth-note { color: #777269; font-size: .9rem; line-height: 1.45; }
 .auth-switch { margin-top: 18px; border: 0; background: none; color: #776852; padding: 0; }
 .form-error { margin: 0; color: #a33d32; font-size: .9rem; }
+.turnstile-row { display: grid; gap: 6px; }
 
 /* The dark palette keeps the existing hierarchy and spacing intact. */
 :root[data-theme="dark"] .topbar, :root[data-theme="dark"] .script-tree { background: var(--panel-background); border-color: var(--border); }

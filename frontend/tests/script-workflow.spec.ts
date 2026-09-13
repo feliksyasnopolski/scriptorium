@@ -4,7 +4,7 @@ type AuthContext = { context: APIRequestContext; token: string; user: { id: stri
 const test = base.extend<{ auth: AuthContext }>({
   auth: async ({ playwright }, use) => {
     const context = await playwright.request.newContext({ baseURL: 'http://127.0.0.1:3000' })
-    const response = await context.post('/api/v1/auth/signup', { data: { username: `playwright-${Date.now()}-${Math.random().toString(16).slice(2)}`, password: 'password123', password_confirmation: 'password123' } })
+    const response = await context.post('/api/v1/auth/signup', { data: { username: `playwright-${Date.now()}-${Math.random().toString(16).slice(2)}`, password: 'password123', password_confirmation: 'password123', turnstile_token: 'test-token' } })
     const body = await response.json()
     await context.dispose()
     const authenticatedContext = await playwright.request.newContext({ baseURL: 'http://127.0.0.1:3000', extraHTTPHeaders: { Authorization: `Bearer ${body.token}` } })

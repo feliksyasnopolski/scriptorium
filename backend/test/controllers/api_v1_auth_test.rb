@@ -2,7 +2,7 @@ require "test_helper"
 
 class ApiV1AuthTest < ActionDispatch::IntegrationTest
   test "signs up, logs in, identifies and revokes a device session" do
-    post "/api/v1/auth/signup", params: { username: "Alice", password: "password123", password_confirmation: "password123" }
+    post "/api/v1/auth/signup", params: { username: "Alice", password: "password123", password_confirmation: "password123", turnstile_token: "test-token" }
     assert_response :created
     token = response.parsed_body.fetch("token")
     user = response.parsed_body.fetch("user")
@@ -18,6 +18,35 @@ class ApiV1AuthTest < ActionDispatch::IntegrationTest
     assert_response :unauthorized
   end
 
+  test "rejects signup without a Turnstile token and does not create a user" do
+    assert_no_difference("User.count") do
+      post "/api/v1/auth/signup", params: { username: "missing-token", password: "password123", password_confirmation: "password123" }
+    end
+
+    assert_response :unprocessable_entity
+    assert_equal "Signup verification failed. Please try again.", response.parsed_body["error"]
+  end
+
+  test "rejects failed Turnstile verification and does not create a user" do
+    with_turnstile_verification(false) do
+      assert_no_difference("User.count") do
+        post "/api/v1/auth/signup", params: { username: "failed-token", password: "password123", password_confirmation: "password123", turnstile_token: "invalid-token" }
+      end
+    end
+
+    assert_response :unprocessable_entity
+  end
+
+  test "rejects a Turnstile verification failure safely" do
+    with_http_timeout do
+      assert_no_difference("User.count") do
+        post "/api/v1/auth/signup", params: { username: "network-failure", password: "password123", password_confirmation: "password123", turnstile_token: "token" }
+      end
+    end
+
+    assert_response :unprocessable_entity
+  end
+
   test "logs in case insensitively and rejects invalid credentials" do
     User.create!(username: "Alice", password: "password123")
     post "/api/v1/auth/login", params: { username: "alice", password: "password123" }
@@ -29,8 +58,10 @@ class ApiV1AuthTest < ActionDispatch::IntegrationTest
   end
 
   test "rejects duplicate usernames case insensitively and protects projects" do
-    post "/api/v1/auth/signup", params: { username: "Alice", password: "password123", password_confirmation: "password123" }
-    post "/api/v1/auth/signup", params: { username: "alice", password: "password123", password_confirmation: "password123" }
+    with_turnstile_verification(true) do
+      post "/api/v1/auth/signup", params: { username: "Alice", password: "password123", password_confirmation: "password123", turnstile_token: "valid-token" }
+      post "/api/v1/auth/signup", params: { username: "alice", password: "password123", password_confirmation: "password123", turnstile_token: "valid-token" }
+    end
     assert_response :unprocessable_entity
 
     get "/api/v1/projects"
@@ -50,5 +81,23 @@ class ApiV1AuthTest < ActionDispatch::IntegrationTest
     assert_response :not_found
     delete "/api/v1/projects/#{project_id}", headers: headers
     assert_response :not_found
+  end
+
+  private
+
+  def with_turnstile_verification(result)
+    original = TurnstileVerifier.method(:verify)
+    TurnstileVerifier.define_singleton_method(:verify) { |_token, _remote_ip| result }
+    yield
+  ensure
+    TurnstileVerifier.define_singleton_method(:verify, original)
+  end
+
+  def with_http_timeout
+    original = Net::HTTP.method(:start)
+    Net::HTTP.define_singleton_method(:start) { |*| raise Net::OpenTimeout }
+    yield
+  ensure
+    Net::HTTP.define_singleton_method(:start, original)
   end
 end
