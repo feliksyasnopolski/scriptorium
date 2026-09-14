@@ -24,11 +24,11 @@ Rails.application.configure do
   # Store uploaded files on the local file system (see config/storage.yml for options).
   config.active_storage.service = :local
 
-  # Assume all access to the app is happening through a SSL-terminating reverse proxy.
+  # Assume all access to the app is happening through the host ingress proxy.
   config.assume_ssl = true
 
   # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
-  # The deployment terminates HTTP at kamal-proxy. Keep SSL enforcement on by
+  # Host Caddy terminates public TLS and forwards HTTP to kamal-proxy. Keep SSL enforcement on by
   # default, while allowing the current IP-only installation to run without a
   # certificate until a production hostname is configured.
   config.force_ssl = ENV.fetch("FORCE_SSL", "true") == "true"

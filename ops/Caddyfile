@@ -1,0 +1,33 @@
+# Host-level ingress for Scriptorium.
+#
+# Certbot temporarily owns the public IP certificate. Caddy consumes the PEM
+# files and owns public ports 80/443; Kamal keeps ownership of deployment,
+# health checks, and version switching behind the loopback HTTP listener.
+
+{
+    default_sni 193.123.38.157
+}
+
+http://193.123.38.157 {
+    handle /.well-known/acme-challenge/* {
+        root * /var/lib/caddy/acme
+        file_server
+    }
+
+    handle {
+        redir https://193.123.38.157{uri} 308
+    }
+}
+
+https://193.123.38.157 {
+    tls /etc/letsencrypt/live/193.123.38.157/fullchain.pem /etc/letsencrypt/live/193.123.38.157/privkey.pem
+
+    handle /.well-known/acme-challenge/* {
+        root * /var/lib/caddy/acme
+        file_server
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:8080
+    }
+}

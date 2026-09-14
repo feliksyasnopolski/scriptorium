@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+certificate_dir=/etc/letsencrypt/live/193.123.38.157
+
+test -r "$certificate_dir/fullchain.pem"
+test -r "$certificate_dir/privkey.pem"
+
+archive_certificate_dir=$(dirname "$(readlink -f "$certificate_dir/privkey.pem")")
+
+# Certbot may point the live symlinks at newly-created archive files after a
+# renewal. Grant only Caddy access to the current certificate and key while
+# keeping the private key inaccessible to other users.
+setfacl -m u:caddy:rx /etc/letsencrypt /etc/letsencrypt/live /etc/letsencrypt/archive
+setfacl -m u:caddy:rx "$certificate_dir"
+setfacl -m u:caddy:rx "$archive_certificate_dir"
+setfacl -m u:caddy:r "$certificate_dir/fullchain.pem" "$certificate_dir/privkey.pem"
+
+systemctl reload caddy
