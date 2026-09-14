@@ -3,6 +3,8 @@ import type { ProjectDocument } from '../types'
 
 export type RequestError = Error & { status?: number; document?: ProjectDocument }
 
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3000').replace(/\/$/, '')
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}, authenticated = true): Promise<T> {
   const headers = new Headers(options.headers)
   headers.set('Content-Type', 'application/json')
@@ -10,7 +12,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, aut
     const token = getAuthToken()
     if (token) headers.set('Authorization', `Bearer ${token}`)
   }
-  const response = await fetch(`/api/v1${path}`, { ...options, headers })
+  const response = await fetch(`${apiBaseUrl}/api/v1${path}`, { ...options, headers })
   const body = response.status === 204 ? undefined : await response.json().catch(() => ({}))
   if (!response.ok) {
     const errors = Object.values((body as { errors?: Record<string, string[]> })?.errors ?? {}).flat()

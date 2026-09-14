@@ -1,6 +1,25 @@
 require "test_helper"
 
 class ApiV1AuthTest < ActionDispatch::IntegrationTest
+  test "allows arbitrary browser origins and API preflights" do
+    get "/up", headers: { "Origin" => "https://example.invalid" }
+    assert_response :success
+    assert_equal "*", response.headers["Access-Control-Allow-Origin"]
+    assert_nil response.headers["Access-Control-Allow-Credentials"]
+
+    options "/api/v1/auth/signup", headers: {
+      "Origin" => "https://example.invalid",
+      "Access-Control-Request-Method" => "POST",
+      "Access-Control-Request-Headers" => "authorization,content-type"
+    }
+    assert_response :no_content
+    assert_equal "*", response.headers["Access-Control-Allow-Origin"]
+    assert_includes response.headers["Access-Control-Allow-Methods"], "POST"
+    assert_includes response.headers["Access-Control-Allow-Headers"], "Authorization"
+    assert_includes response.headers["Access-Control-Allow-Headers"], "Content-Type"
+    assert_nil response.headers["Access-Control-Allow-Credentials"]
+  end
+
   test "signs up, logs in, identifies and revokes a device session" do
     post "/api/v1/auth/signup", params: { username: "Alice", password: "password123", password_confirmation: "password123", turnstile_token: "test-token" }
     assert_response :created
