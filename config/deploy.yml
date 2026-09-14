@@ -19,10 +19,17 @@ registry:
 builder:
   arch: arm64
   context: backend
-  dockerfile: Dockerfile
+  dockerfile: backend/Dockerfile
 
 proxy:
   app_port: 3000
+  hosts:
+    - 193.123.38.157
+  ssl:
+    certificate_pem: SCRIPTORIUM_CERTIFICATE_PEM
+    private_key_pem: SCRIPTORIUM_PRIVATE_KEY_PEM
+  ssl_redirect: false
+  forward_headers: true
   healthcheck:
     path: /up
     interval: 5

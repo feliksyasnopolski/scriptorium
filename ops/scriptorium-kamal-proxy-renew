@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+
+certificate_dir=/etc/letsencrypt/live/193.123.38.157
+proxy_tls_dir=/home/ubuntu/.kamal/proxy/apps-config/scriptorium-backend/tls/web
+
+test -r "$certificate_dir/fullchain.pem"
+test -r "$certificate_dir/privkey.pem"
+
+if [ "$(docker inspect -f '{{.State.Running}}' kamal-proxy 2>/dev/null || true)" != true ]; then
+  docker start kamal-proxy >/dev/null
+fi
+
+install -d -o root -g root -m 0755 "$proxy_tls_dir"
+install -o 1001 -g 1001 -m 0644 "$certificate_dir/fullchain.pem" "$proxy_tls_dir/cert.pem"
+install -o 1001 -g 1001 -m 0600 "$certificate_dir/privkey.pem" "$proxy_tls_dir/key.pem"
+
+target_container=$(docker ps \
+  --filter label=service=scriptorium-backend \
+  --filter label=role=web \
+  --format '{{.Names}}' | head -n 1)
+test -n "$target_container"
+
+target_ip=$(docker inspect \
+  --format '{{with index .NetworkSettings.Networks "kamal"}}{{.IPAddress}}{{end}}' \
+  "$target_container")
+test -n "$target_ip"
+
+docker exec kamal-proxy kamal-proxy deploy scriptorium-backend-web \
+  --target "$target_ip:3000" \
+  --host 193.123.38.157 \
+  --tls \
+  --tls-certificate-path /home/kamal-proxy/.apps-config/scriptorium-backend/tls/web/cert.pem \
+  --tls-private-key-path /home/kamal-proxy/.apps-config/scriptorium-backend/tls/web/key.pem \
+  --health-check-path /up \
+  --health-check-interval 5s \
+  --health-check-timeout 5s \
+  --tls-redirect=false
